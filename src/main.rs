@@ -1,15 +1,13 @@
 //! `cuentas` — la línea de comandos de goose-cuentas.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use std::process::ExitCode;
 
 use goose_cuentas::estadisticas::{self, Medicion, Seguidores};
 use goose_cuentas::registro::Registro;
-use goose_cuentas::resumen;
 use goose_cuentas::vault::{inicio, Config, Vault};
-use goose_cuentas::{publicado, slug_valido};
-use guion_tablero::tablero::Tablero;
+use goose_cuentas::{acciones, ui};
 
 const USO: &str = "\
 cuentas — la administración local de las cuentas de la casa
@@ -31,6 +29,8 @@ uso: cuentas [--vault DIR] <comando>
   pedidos [<cuenta>]              los encargos y su estado
   publicado <cuenta> <post> [--enlace URL] [--fecha F]
                                   el dueño lo subió: marca su README
+
+  ui [--puerto N]                 la interfaz en http://127.0.0.1:7171 (solo en esta máquina)
 
 El vault es --vault, si no $GOOSE_VAULT, si no el que recordó `iniciar`
 (~/.config/goose-cuentas/config.toml), si no ~/vault/vault personal.
@@ -151,7 +151,7 @@ fn correr(v: Vec<String>) -> Result<(), String> {
         }
         ["tablero"] => {
             a.solo(&["--vault", "--json"])?;
-            let r = armar(&vault, &hoy)?;
+            let r = acciones::resumen(&vault, &hoy)?;
             print!(
                 "{}",
                 if a.tiene("--json") {
@@ -164,7 +164,11 @@ fn correr(v: Vec<String>) -> Result<(), String> {
         }
         ["nota"] => {
             a.solo(&["--vault"])?;
-            escribir_nota(&vault, &hoy)
+            println!(
+                "escrita {}",
+                acciones::escribir_nota(&vault, &hoy)?.display()
+            );
+            Ok(())
         }
         ["stats", "post", cuenta, post] => {
             a.solo(&[
@@ -179,7 +183,6 @@ fn correr(v: Vec<String>) -> Result<(), String> {
                 "--seguidores",
                 "--nota",
             ])?;
-            let reg = Registro::leer(&vault.registro())?;
             let m = Medicion {
                 fecha,
                 cuenta: cuenta.to_string(),
@@ -193,13 +196,13 @@ fn correr(v: Vec<String>) -> Result<(), String> {
                 seguidores_ganados: a.numero("--seguidores")?,
                 nota: a.valor("--nota").unwrap_or("").to_string(),
             };
-            estadisticas::agregar_medicion(&vault.posts_csv(), &m, &reg)?;
+            let nota = acciones::medir_post(&vault, &m, &hoy)?;
             println!("agregada: {} {} del {}", m.cuenta, m.post, m.fecha);
-            escribir_nota(&vault, &hoy)
+            println!("escrita {}", nota.display());
+            Ok(())
         }
         ["stats", "seguidores", cuenta, n] => {
             a.solo(&["--vault", "--fecha", "--nota"])?;
-            let reg = Registro::leer(&vault.registro())?;
             let seguidores = n
                 .replace(['_', ',', '\u{202f}', ' '], "")
                 .parse::<u64>()
@@ -210,12 +213,13 @@ fn correr(v: Vec<String>) -> Result<(), String> {
                 seguidores,
                 nota: a.valor("--nota").unwrap_or("").to_string(),
             };
-            estadisticas::agregar_seguidores(&vault.seguidores_csv(), &s, &reg)?;
+            let nota = acciones::medir_seguidores(&vault, &s, &hoy)?;
             println!(
                 "agregada: {} con {} seguidores el {}",
                 s.cuenta, s.seguidores, s.fecha
             );
-            escribir_nota(&vault, &hoy)
+            println!("escrita {}", nota.display());
+            Ok(())
         }
         ["stats", "ver", resto @ ..] if resto.len() <= 1 => {
             a.solo(&["--vault", "--json"])?;
@@ -255,32 +259,26 @@ fn correr(v: Vec<String>) -> Result<(), String> {
         }
         ["pedir", cuenta, idea @ ..] if !idea.is_empty() => {
             a.solo(&["--vault"])?;
-            let reg = Registro::leer(&vault.registro())?;
-            let c = reg.cuenta(cuenta)?;
-            let t = tablero_de(&reg.repo(c))?;
-            let e = t.encargar(&c.nombre, &idea.join(" "), &hoy, None)?;
+            let (e, repo) = acciones::pedir(&vault, cuenta, &idea.join(" "), &hoy)?;
             println!(
                 "{} para {}: «{}» (en {}/encargos.toml)",
                 e.id,
-                c.nombre,
+                e.cuenta,
                 e.idea,
-                reg.repo(c).display()
+                repo.display()
             );
             Ok(())
         }
         ["pedidos", resto @ ..] if resto.len() <= 1 => {
             a.solo(&["--vault"])?;
-            let reg = Registro::leer(&vault.registro())?;
-            let cuentas = match resto.first() {
-                Some(s) => vec![reg.cuenta(s)?.clone()],
-                None => reg.cuentas.clone(),
-            };
-            for c in &cuentas {
-                let t = tablero_de(&reg.repo(c))?;
-                let Some(tc) = t.cuenta(&c.nombre) else {
-                    continue;
-                };
-                for e in t.encargos_de(tc) {
+            if let Some(s) = resto.first() {
+                Registro::leer(&vault.registro())?.cuenta(s)?;
+            }
+            for c in acciones::cuentas(&vault)?
+                .iter()
+                .filter(|c| resto.first().is_none_or(|s| *s == c.slug))
+            {
+                for e in &c.pedidos {
                     let post = e
                         .post
                         .as_deref()
@@ -296,45 +294,21 @@ fn correr(v: Vec<String>) -> Result<(), String> {
         }
         ["publicado", cuenta, post] => {
             a.solo(&["--vault", "--fecha", "--enlace"])?;
-            if !slug_valido(post) {
-                return Err(format!("post «{post}»: el nombre de su carpeta"));
-            }
-            let reg = Registro::leer(&vault.registro())?;
-            let c = reg.cuenta(cuenta)?;
-            let t = tablero_de(&reg.repo(c))?;
-            let tc = t
-                .cuenta(&c.nombre)
-                .ok_or_else(|| format!("«{}» no está en su guion-cuentas.toml", c.nombre))?;
-            let p = tc
-                .posts
-                .iter()
-                .find(|p| p.nombre == *post)
-                .ok_or_else(|| format!("{} no tiene el post «{post}»", c.nombre))?;
-            let linea = publicado::marcar(&p.dir.join("README.md"), &fecha, a.valor("--enlace"))?;
-            println!("{}/README.md\n{linea}", p.ruta);
-            println!("(falta el commit en {})", reg.repo(c).display());
+            let (readme, linea, repo) =
+                acciones::marcar_publicado(&vault, cuenta, post, &fecha, a.valor("--enlace"))?;
+            println!("{readme}\n{linea}");
+            println!("(falta el commit en {})", repo.display());
             Ok(())
+        }
+        ["ui"] => {
+            a.solo(&["--vault", "--puerto"])?;
+            let puerto = match a.valor("--puerto") {
+                Some(p) => p.parse::<u16>().map_err(|_| format!("--puerto «{p}»"))?,
+                None => ui::PUERTO,
+            };
+            Registro::leer(&vault.registro())?;
+            ui::servir(&vault, puerto)
         }
         _ => Err(format!("no entiendo «{}»; cuentas --help", a.pos.join(" "))),
     }
-}
-
-fn tablero_de(repo: &Path) -> Result<Tablero, String> {
-    Tablero::leer(&[repo.to_path_buf()], &|_: &Path| None)
-}
-
-fn armar(vault: &Vault, hoy: &str) -> Result<resumen::Resumen, String> {
-    let reg = Registro::leer(&vault.registro())?;
-    let ms = estadisticas::leer_posts(&vault.posts_csv())?;
-    let ss = estadisticas::leer_seguidores(&vault.seguidores_csv())?;
-    let tableros = resumen::leer_tableros(&reg);
-    Ok(resumen::armar(&reg, &ms, &ss, &tableros, hoy))
-}
-
-fn escribir_nota(vault: &Vault, hoy: &str) -> Result<(), String> {
-    let r = armar(vault, hoy)?;
-    let ruta: PathBuf = vault.resumen_md();
-    std::fs::write(&ruta, r.markdown()).map_err(|e| format!("{}: {e}", ruta.display()))?;
-    println!("escrita {}", ruta.display());
-    Ok(())
 }
