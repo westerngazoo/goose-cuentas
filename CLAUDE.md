@@ -30,6 +30,8 @@ lee `README.md`, `docs/plan.md` y `docs/decisions.md`.
   vuelve a leer antes de guardarlo.
 - `src/resumen.rs`: el tablero (texto, JSON y `resumen.md`).
 - `src/publicado.rs`: la línea `estado:` del README, con lo anterior detrás.
+- `src/acciones.rs`: lo que hacen la línea de comandos y la interfaz, lo mismo para las dos.
+- `src/ui.rs` y `src/ui.html`: `cuentas ui`. Solo std, atado a 127.0.0.1, con el `Host` comprobado y los POST en JSON. Sin CDN.
 - `src/main.rs`: la línea de comandos.
 
 Antes de un commit: `cargo fmt --check`,

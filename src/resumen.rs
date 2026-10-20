@@ -171,7 +171,9 @@ pub fn armar(
                 seguidores.iter().filter(|s| s.cuenta == c.slug).collect();
             segs.sort_by(|a, b| a.fecha.cmp(&b.fecha)); // estable: a la misma fecha, la última fila queda al final
             let ultima_s = segs.last();
-            let anterior_s = segs.len().checked_sub(2).map(|i| segs[i]);
+            // el cambio es contra la medición anterior de otro día
+            let anterior_s =
+                ultima_s.and_then(|u| segs.iter().rev().find(|s| s.fecha < u.fecha).copied());
 
             CuentaResumen {
                 slug: c.slug.clone(),
@@ -312,8 +314,8 @@ impl Resumen {
                 c.seguidores_cambio
                     .map(|d| format!("{d:+}"))
                     .unwrap_or_else(|| "—".into()),
-                miles(c.vistas),
-                miles(c.likes),
+                celda((!c.posts.is_empty()).then_some(c.vistas)),
+                celda((!c.posts.is_empty()).then_some(c.likes)),
                 c.interaccion.map(porcentaje).unwrap_or_else(|| "—".into()),
                 c.faltan.len()
             ));
@@ -443,6 +445,33 @@ mod tests {
     }
 
     #[test]
+    fn el_cambio_es_contra_otro_dia() {
+        let s = |f: &str, n| Seguidores {
+            fecha: f.into(),
+            cuenta: "rotor".into(),
+            seguidores: n,
+            nota: String::new(),
+        };
+        let r = armar(
+            &registro(),
+            &[],
+            &[
+                s("2026-10-01", 300),
+                s("2026-10-20", 380),
+                s("2026-10-20", 390),
+            ],
+            &[],
+            "2026-10-21",
+        );
+        let c = &r.cuentas[0];
+        assert_eq!(c.seguidores, Some(390));
+        assert_eq!(c.seguidores_cambio, Some(90));
+        assert_eq!(c.seguidores_desde.as_deref(), Some("2026-10-01"));
+        let r = armar(&registro(), &[], &[s("2026-10-20", 390)], &[], "2026-10-21");
+        assert_eq!(r.cuentas[0].seguidores_cambio, None);
+    }
+
+    #[test]
     fn sin_numeros_no_inventa_ceros() {
         let r = armar(&registro(), &[], &[], &[], "2026-10-21");
         let c = &r.cuentas[0];
@@ -450,6 +479,7 @@ mod tests {
         assert_eq!(c.interaccion, None);
         assert!(r.texto().contains("seguidores: sin medición"));
         assert!(r.markdown().contains("Sin mediciones todavía."));
+        assert!(r.markdown().contains("| Rotor | — | — | — | — | — | 0 |"));
     }
 
     #[test]

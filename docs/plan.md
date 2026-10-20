@@ -16,7 +16,7 @@ Qué se abstrae, en qué orden y qué queda en cada capa.
 
 0. **Hecho: el núcleo.** El registro, los CSV de estadísticas, el tablero
    (texto, JSON y `resumen.md`), los pedidos y `publicado`, con pruebas.
-1. **La interfaz local (`cuentas ui`).** Un servidor solo en `127.0.0.1`,
+1. **Hecho: la interfaz local (`cuentas ui`).** Un servidor solo en `127.0.0.1`,
    en Rust, sobre este mismo núcleo, que escribe los mismos archivos. Páginas:
    - **Tablero:** las cuatro cuentas y sus seguidores en el tiempo (una
      gráfica por cuenta), las vistas y la interacción, los posts con más vistas

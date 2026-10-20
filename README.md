@@ -29,6 +29,21 @@ queda en `~/.config/goose-cuentas/config.toml`. Si tu segundo cerebro ordena
 las notas en otra carpeta (por ejemplo `Areas/Cuentas`), escribe ahí
 `carpeta = "Areas/Cuentas"` antes de `iniciar`.
 
+## La interfaz
+
+```bash
+cuentas ui                 # abre http://127.0.0.1:7171 en tu navegador
+```
+
+Solo se abre en tu propia máquina (127.0.0.1). Tiene cuatro pestañas:
+
+- **Tablero:** cada cuenta con sus seguidores, vistas, likes e interacción; una gráfica de seguidores en el tiempo y otra de vistas por post.
+- **Capturar:** las cifras de un post (vistas, alcance, likes, comentarios, guardados, compartidos, seguidores ganados) y los seguidores de una cuenta.
+- **Pedir reel:** la cuenta, el formato y la pregunta.
+- **Posts:** el estado de cada post y el botón «Ya lo subí».
+
+Escribe los mismos archivos que la línea de comandos. Se cierra con Ctrl-C.
+
 ## Uso (las cifras son de ejemplo)
 
 ```bash
@@ -71,5 +86,4 @@ una columna movida falla con su nombre en vez de leerse mal.
 
 ## Lo que sigue
 
-`docs/plan.md`. Lo próximo es la interfaz local (`cuentas ui`): ver las
-estadísticas con gráficas y capturar likes y vistas en un formulario.
+`docs/plan.md`.

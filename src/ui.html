@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cuentas de la casa</title>
+<link rel="icon" href="data:,">
+<style>
+:root {
+  color-scheme: light;
+  --surface-0: #f3f2ef;
+  --surface-1: #fcfcfb;
+  --line: #e2e1dc;
+  --grid: #ecebe7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #7a7974;
+  --series-1: #2a78d6;
+  --series-1-soft: #cde2fb;
+  --ok: #1f7a3d;
+  --error: #b42318;
+  --focus: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface-0: #121211;
+    --surface-1: #1a1a19;
+    --line: #2e2e2c;
+    --grid: #262624;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8f8e86;
+    --series-1: #3987e5;
+    --series-1-soft: #184f95;
+    --ok: #4fbf72;
+    --error: #f0776c;
+    --focus: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-0: #121211;
+  --surface-1: #1a1a19;
+  --line: #2e2e2c;
+  --grid: #262624;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --text-muted: #8f8e86;
+  --series-1: #3987e5;
+  --series-1-soft: #184f95;
+  --ok: #4fbf72;
+  --error: #f0776c;
+  --focus: #3987e5;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  background: var(--surface-0);
+  color: var(--text-primary);
+  font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+header {
+  display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+  padding: 18px 24px 0; max-width: 1200px; margin: 0 auto;
+}
+header h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+header .vault { color: var(--text-muted); font-size: 13px; overflow-wrap: anywhere; }
+nav {
+  display: flex; gap: 4px; padding: 12px 24px 0; max-width: 1200px; margin: 0 auto;
+  border-bottom: 1px solid var(--line); overflow-x: auto;
+}
+nav button {
+  font: inherit; background: none; border: 0; color: var(--text-secondary);
+  padding: 8px 12px 10px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap;
+}
+nav button[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--series-1); font-weight: 600; }
+main { max-width: 1200px; margin: 0 auto; padding: 20px 24px 64px; }
+section[hidden] { display: none; }
+h2 { font-size: 16px; margin: 28px 0 10px; }
+h2:first-child { margin-top: 0; }
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.card {
+  background: var(--surface-1); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+  min-width: 0;
+}
+.card h3 { margin: 0; font-size: 15px; }
+.handle { color: var(--text-muted); font-size: 13px; }
+.hero { font-size: 32px; font-weight: 650; letter-spacing: -0.02em; margin-top: 8px; font-variant-numeric: tabular-nums; }
+.hero small { font-size: 13px; font-weight: 400; color: var(--text-secondary); margin-left: 6px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+.stats div { font-size: 12px; color: var(--text-secondary); }
+.stats b { display: block; font-size: 15px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.estados { margin-top: 10px; font-size: 12px; color: var(--text-secondary); }
+.falta { margin-top: 8px; font-size: 12px; color: var(--text-secondary); }
+.falta b { color: var(--text-primary); }
+.chart { width: 100%; height: auto; display: block; overflow: visible; }
+.chart text { fill: var(--text-muted); font-size: 11px; }
+.chart .axis { stroke: var(--line); }
+.chart .gridline { stroke: var(--grid); }
+.chart .serie { stroke: var(--series-1); stroke-width: 2; fill: none; }
+.chart .punto { fill: var(--series-1); stroke: var(--surface-1); stroke-width: 2; }
+.chart .barra { fill: var(--series-1); }
+.chart .valor { fill: var(--text-secondary); font-size: 11px; }
+.chart .etq { fill: var(--text-secondary); font-size: 12px; }
+.chart .cruz { stroke: var(--text-muted); stroke-dasharray: 3 3; }
+.vacio { color: var(--text-muted); font-size: 13px; padding: 18px 0; }
+.tip {
+  position: fixed; pointer-events: none; background: var(--surface-1); color: var(--text-primary);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12); z-index: 10; display: none; white-space: nowrap;
+}
+.tip b { font-variant-numeric: tabular-nums; }
+form { display: grid; gap: 12px; }
+.campos { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+label { display: grid; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+input, select, textarea {
+  font: inherit; color: var(--text-primary); background: var(--surface-0);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; width: 100%;
+}
+textarea { min-height: 70px; resize: vertical; }
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible {
+  outline: 2px solid var(--focus); outline-offset: 1px;
+}
+.acciones { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+form.acciones { flex-wrap: nowrap; min-width: 320px; }
+form.acciones input { flex: 1; }
+.btn {
+  font: inherit; font-weight: 600; background: var(--series-1); color: #fff; border: 0; border-radius: 8px;
+  padding: 9px 16px; cursor: pointer;
+}
+.btn.sec { background: transparent; color: var(--text-primary); border: 1px solid var(--line); font-weight: 500; }
+.btn:disabled { opacity: .5; cursor: default; }
+.msg { font-size: 13px; }
+.msg.ok { color: var(--ok); }
+.msg.error { color: var(--error); }
+.dos { display: grid; gap: 12px; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+@media (max-width: 820px) { .dos { grid-template-columns: 1fr; } }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+th { color: var(--text-secondary); font-weight: 600; font-size: 12px; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.tabla { overflow-x: auto; }
+.chip {
+  display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--text-secondary); white-space: nowrap;
+}
+.chip.publicado { border-color: var(--series-1); color: var(--series-1); }
+.chip.listo { border-color: var(--text-secondary); color: var(--text-primary); }
+.nota { color: var(--text-muted); font-size: 12px; margin: 6px 0 0; }
+.aviso { color: var(--error); font-size: 12px; margin-top: 8px; }
+@media (max-width: 560px) {
+  header, nav, main { padding-left: 16px; padding-right: 16px; }
+  .stats { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Cuentas de la casa</h1>
+  <span class="vault" id="vault"></span>
+</header>
+<nav role="tablist">
+  <button role="tab" data-tab="tablero" aria-selected="true">Tablero</button>
+  <button role="tab" data-tab="capturar" aria-selected="false">Capturar</button>
+  <button role="tab" data-tab="pedir" aria-selected="false">Pedir reel</button>
+  <button role="tab" data-tab="posts" aria-selected="false">Posts</button>
+</nav>
+<main>
+  <section id="tablero">
+    <div class="grid" id="tarjetas"></div>
+    <h2>Seguidores en el tiempo</h2>
+    <div class="grid" id="seguidores-graficas"></div>
+    <h2>Vistas por post (la medición más reciente de cada uno)</h2>
+    <div class="grid" id="vistas-graficas"></div>
+    <p class="nota">Los números los reporta Instagram y los copias tú, con la fecha en que los copiaste. La interacción es (likes + comentarios + guardados + compartidos) ÷ vistas, calculada aquí. Un número que no copiaste aparece como «—», no como cero.</p>
+  </section>
+
+  <section id="capturar" hidden>
+    <div class="dos">
+      <div class="card">
+        <h2>Un post</h2>
+        <form id="f-medicion">
+          <div class="campos">
+            <label>Cuenta <select name="cuenta" id="m-cuenta" required></select></label>
+            <label>Post <select name="post" id="m-post" required></select></label>
+            <label id="m-otro-l" hidden>Slug del post <input name="otro" id="m-otro" placeholder="04-press" pattern="[a-z0-9]+(-[a-z0-9]+)*"></label>
+            <label>Fecha <input type="date" name="fecha" id="m-fecha"></label>
+          </div>
+          <div class="campos">
+            <label>Vistas <input name="vistas" inputmode="numeric"></label>
+            <label>Alcance <input name="alcance" inputmode="numeric"></label>
+            <label>Likes <input name="likes" inputmode="numeric"></label>
+            <label>Comentarios <input name="comentarios" inputmode="numeric"></label>
+            <label>Guardados <input name="guardados" inputmode="numeric"></label>
+            <label>Compartidos <input name="compartidos" inputmode="numeric"></label>
+            <label>Seguidores ganados <input name="seguidores_ganados" inputmode="numeric"></label>
+          </div>
+          <label>Nota <input name="nota" placeholder="de la app, de Insights…"></label>
+          <div class="acciones"><button class="btn">Guardar medición</button><span class="msg" id="m-msg" role="status"></span></div>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Seguidores</h2>
+        <form id="f-seguidores">
+          <label>Cuenta <select name="cuenta" id="s-cuenta" required></select></label>
+          <label>Seguidores <input name="seguidores" inputmode="numeric" required></label>
+          <label>Fecha <input type="date" name="fecha" id="s-fecha"></label>
+          <label>Nota <input name="nota"></label>
+          <div class="acciones"><button class="btn">Guardar</button><span class="msg" id="s-msg" role="status"></span></div>
+        </form>
+      </div>
+    </div>
+    <h2>Últimas mediciones</h2>
+    <div class="card tabla"><table id="t-mediciones"></table></div>
+  </section>
+
+  <section id="pedir" hidden>
+    <div class="dos">
+      <div class="card">
+        <h2>Pedir un reel</h2>
+        <form id="f-pedido">
+          <div class="campos">
+            <label>Cuenta <select name="cuenta" id="p-cuenta" required></select></label>
+            <label>Formato
+              <select name="formato">
+                <option value="reel">Reel (9:16)</option>
+                <option value="short">YouTube Short</option>
+                <option value="youtube">YouTube largo (16:9)</option>
+              </select>
+            </label>
+          </div>
+          <label>La pregunta (una línea) <input name="idea" required maxlength="300" placeholder="¿Por qué el kart levanta una rueda?"></label>
+          <div class="acciones"><button class="btn">Pedir</button><span class="msg" id="p-msg" role="status"></span></div>
+          <p class="nota">Queda como encargo «pendiente» en el repo de la cuenta. El agente de la cuenta lo toma desde ahí y lo lleva hasta «listo». Publicar sigue siendo tuyo.</p>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Pedidos</h2>
+        <div id="pedidos"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="posts" hidden>
+    <div class="acciones">
+      <label style="max-width:260px">Cuenta <select id="x-cuenta"></select></label>
+      <label style="max-width:200px">Estado
+        <select id="x-estado">
+          <option value="">todos</option>
+          <option>listo</option><option>publicado</option><option>revisión</option><option>borrador</option><option>idea</option>
+        </select>
+      </label>
+    </div>
+    <div class="card tabla" style="margin-top:12px"><table id="t-posts"></table></div>
+    <p class="nota">«Ya lo subí» escribe en el README del post en su repo: publicado, la fecha y el enlace. El commit lo haces tú o el agente.</p>
+  </section>
+</main>
+<div class="tip" id="tip"></div>
+
+<script>
+"use strict";
+const $ = (s, r = document) => r.querySelector(s);
+const NBSP = " ";
+const miles = n => n == null ? "—" : String(n).replace(/\B(?=(\d{3})+(?!\d))/g, NBSP);
+const pct = x => x == null ? "—" : (x * 100).toFixed(1) + NBSP + "%";
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+let E = null;
+
+// ---------- pestañas
+const tabs = [...document.querySelectorAll("nav button")];
+function abrir(nombre) {
+  tabs.forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === nombre)));
+  document.querySelectorAll("main > section").forEach(s => s.hidden = s.id !== nombre);
+  try { localStorage.setItem("cuentas-tab", nombre); } catch (_) {}
+}
+tabs.forEach(b => b.addEventListener("click", () => abrir(b.dataset.tab)));
+try { const t = localStorage.getItem("cuentas-tab"); if (t && $("#" + t)) abrir(t); } catch (_) {}
+
+// ---------- tooltip
+const tip = $("#tip");
+function mostrar(ev, html) {
+  tip.innerHTML = html; tip.style.display = "block";
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = ev.clientX + 12, y = ev.clientY - h - 10;
+  if (x + w > innerWidth - 8) x = ev.clientX - w - 12;
+  if (y < 8) y = ev.clientY + 14;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+const ocultar = () => tip.style.display = "none";
+
+// ---------- datos
+async function cargar() {
+  const r = await fetch("/api/estado");
+  const j = await r.json();
+  if (!r.ok) { $("#tarjetas").innerHTML = `<div class="card aviso">${esc(j.error)}</div>`; return; }
+  E = j;
+  $("#vault").textContent = "vault: " + j.vault;
+  pintarTablero(); pintarSelects(); pintarMediciones(); pintarPedidos(); pintarPosts();
+  for (const id of ["#m-fecha", "#s-fecha"]) if (!$(id).value) $(id).value = j.hoy;
+}
+
+async function enviar(ruta, cuerpo, msg) {
+  msg.className = "msg"; msg.textContent = "guardando…";
+  try {
+    const r = await fetch(ruta, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    msg.className = "msg ok"; msg.textContent = j.ok;
+    await cargar();
+    return true;
+  } catch (e) {
+    msg.className = "msg error"; msg.textContent = e.message;
+    return false;
+  }
+}
+
+// ---------- tablero
+function pintarTablero() {
+  const cs = E.resumen.cuentas;
+  $("#tarjetas").innerHTML = cs.map(c => {
+    const cambio = c.seguidores_cambio == null ? "" :
+      `<small>${c.seguidores_cambio >= 0 ? "+" : "−"}${miles(Math.abs(c.seguidores_cambio))} desde el ${esc(c.seguidores_desde)}</small>`;
+    const estados = c.estados.map(([e, n]) => `${esc(e)} ${n}`).join(" · ");
+    const repo = E.cuentas.find(x => x.slug === c.slug);
+    return `<div class="card">
+      <h3>${esc(c.nombre)}</h3>
+      <div class="handle">${c.instagram ? "@" + esc(c.instagram) : "usuario por reservar"}</div>
+      <div class="hero">${miles(c.seguidores)}${c.seguidores == null ? "<small>seguidores: sin medición</small>" : "<small>seguidores</small>"}</div>
+      ${cambio ? `<div class="handle">${cambio}</div>` : ""}
+      <div class="stats">
+        <div>Vistas<b>${c.posts.length ? miles(c.vistas) : "—"}</b></div>
+        <div>Likes<b>${c.posts.length ? miles(c.likes) : "—"}</b></div>
+        <div>Interacción<b>${pct(c.interaccion)}</b></div>
+      </div>
+      ${estados ? `<div class="estados">Posts: ${estados}</div>` : ""}
+      ${c.faltan.length ? `<div class="falta"><b>${c.faltan.length}</b> publicados sin números: ${c.faltan.map(esc).join(", ")}</div>` : ""}
+      ${c.avisos.concat(repo && repo.aviso ? [repo.aviso] : []).map(a => `<div class="aviso">${esc(a)}</div>`).join("")}
+    </div>`;
+  }).join("");
+
+  $("#seguidores-graficas").innerHTML = cs.map(c =>
+    `<div class="card"><h3>${esc(c.nombre)}</h3><div data-seg="${esc(c.slug)}"></div></div>`).join("");
+  cs.forEach(c => lineas($(`[data-seg="${c.slug}"]`), E.seguidores.filter(s => s.cuenta === c.slug)));
+
+  $("#vistas-graficas").innerHTML = cs.map(c =>
+    `<div class="card"><h3>${esc(c.nombre)}</h3><div data-vis="${esc(c.slug)}"></div></div>`).join("");
+  cs.forEach(c => barras($(`[data-vis="${c.slug}"]`), c.posts));
+}
+
+const SVG = "http://www.w3.org/2000/svg";
+function el(tag, attrs, padre) {
+  const e = document.createElementNS(SVG, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (padre) padre.appendChild(e);
+  return e;
+}
+const dia = f => Date.parse(f + "T00:00:00Z") / 864e5;
+
+function escalaLinda(max) {
+  if (max <= 0) return [0, 1];
+  const p = Math.pow(10, Math.floor(Math.log10(max)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * p * 4 >= max) return [m * p, Math.ceil(max / (m * p)) * m * p];
+  return [p, max];
+}
+
+function lineas(cont, datos) {
+  datos = [...datos].sort((a, b) => a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0);
+  if (!datos.length) { cont.innerHTML = `<div class="vacio">Sin mediciones. Captúralas en «Capturar».</div>`; return; }
+  const W = 320, H = 150, L = 44, R = 10, T = 10, B = 24;
+  const xs = datos.map(d => dia(d.fecha)), ys = datos.map(d => d.seguidores);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs) === x0 ? x0 + 1 : Math.max(...xs);
+  const lo = Math.min(...ys), hi = Math.max(...ys);
+  const [paso, tope] = escalaLinda(hi - Math.floor(lo * 0.9) || hi || 1);
+  const base = Math.max(0, Math.floor(lo * 0.9 / paso) * paso);
+  const top = Math.max(base + tope, Math.ceil(hi / paso) * paso);
+  const X = x => L + (x - x0) / (x1 - x0) * (W - L - R);
+  const Y = y => T + (1 - (y - base) / (top - base || 1)) * (H - T - B);
+  const s = el("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart", role: "img", "aria-label": "Seguidores en el tiempo" });
+  for (let v = base; v <= top + 1e-9; v += paso) {
+    el("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "gridline" }, s);
+    el("text", { x: L - 6, y: Y(v) + 4, "text-anchor": "end" }, s).textContent = miles(Math.round(v));
+  }
+  el("line", { x1: L, x2: W - R, y1: H - B, y2: H - B, class: "axis" }, s);
+  const fechas = [datos[0].fecha, datos[datos.length - 1].fecha];
+  el("text", { x: L, y: H - 6 }, s).textContent = fechas[0];
+  if (datos.length > 1) el("text", { x: W - R, y: H - 6, "text-anchor": "end" }, s).textContent = fechas[1];
+  if (datos.length > 1) el("path", { d: datos.map((d, i) => (i ? "L" : "M") + X(xs[i]) + "," + Y(d.seguidores)).join(""), class: "serie" }, s);
+  datos.forEach((d, i) => el("circle", { cx: X(xs[i]), cy: Y(d.seguidores), r: 4, class: "punto" }, s));
+  const ultimo = datos[datos.length - 1];
+  el("text", { x: X(xs[xs.length - 1]) - 6, y: Y(ultimo.seguidores) - 9, "text-anchor": "end", class: "valor" }, s).textContent = miles(ultimo.seguidores);
+  const cruz = el("line", { y1: T, y2: H - B, class: "cruz", visibility: "hidden" }, s);
+  const zona = el("rect", { x: L, y: T, width: W - L - R, height: H - T - B, fill: "transparent" }, s);
+  zona.addEventListener("pointermove", ev => {
+    const r = s.getBoundingClientRect(), px = (ev.clientX - r.left) / r.width * W;
+    let k = 0; xs.forEach((x, i) => { if (Math.abs(X(x) - px) < Math.abs(X(xs[k]) - px)) k = i; });
+    cruz.setAttribute("x1", X(xs[k])); cruz.setAttribute("x2", X(xs[k])); cruz.setAttribute("visibility", "visible");
+    const d = datos[k], prev = datos[k - 1];
+    const dif = prev ? ` (${d.seguidores - prev.seguidores >= 0 ? "+" : "−"}${miles(Math.abs(d.seguidores - prev.seguidores))})` : "";
+    mostrar(ev, `${esc(d.fecha)}<br><b>${miles(d.seguidores)}</b> seguidores${dif}${d.nota ? "<br>" + esc(d.nota) : ""}`);
+  });
+  zona.addEventListener("pointerleave", () => { cruz.setAttribute("visibility", "hidden"); ocultar(); });
+  cont.replaceChildren(s);
+}
+
+function barras(cont, posts) {
+  const ps = posts.filter(p => p.ultima && p.ultima.vistas != null).slice(0, 8);
+  if (!ps.length) { cont.innerHTML = `<div class="vacio">Ningún post con vistas todavía.</div>`; return; }
+  const W = 320, fila = 26, L = 112, R = 52, H = ps.length * fila + 4;
+  const max = Math.max(...ps.map(p => p.ultima.vistas)) || 1;
+  const s = el("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart", role: "img", "aria-label": "Vistas por post" });
+  ps.forEach((p, i) => {
+    const y = i * fila + 4, w = Math.max(2, p.ultima.vistas / max * (W - L - R));
+    const nombre = p.post.length > 16 ? p.post.slice(0, 15) + "…" : p.post;
+    el("text", { x: L - 8, y: y + 14, "text-anchor": "end", class: "etq" }, s).textContent = nombre;
+    el("path", { d: `M${L},${y + 4}h${w - 4}a4,4 0 0 1 4,4v6a4,4 0 0 1 -4,4h${-(w - 4)}z`, class: "barra" }, s);
+    el("text", { x: L + w + 6, y: y + 14, class: "valor" }, s).textContent = miles(p.ultima.vistas);
+    const hit = el("rect", { x: 0, y, width: W, height: fila, fill: "transparent" }, s);
+    const m = p.ultima;
+    hit.addEventListener("pointermove", ev => mostrar(ev,
+      `<b>${esc(p.titulo || p.post)}</b><br>${esc(m.fecha)} · ${miles(m.vistas)} vistas · ${miles(m.likes)} likes` +
+      `<br>${miles(m.guardados)} guardados · ${miles(m.compartidos)} compartidos · ${miles(m.comentarios)} comentarios`));
+    hit.addEventListener("pointerleave", ocultar);
+  });
+  cont.replaceChildren(s);
+}
+
+// ---------- formularios
+function opcionesCuentas(sel) {
+  const v = sel.value;
+  sel.innerHTML = E.cuentas.map(c => `<option value="${esc(c.slug)}">${esc(c.nombre)}</option>`).join("");
+  if (v) sel.value = v;
+}
+function pintarSelects() {
+  ["#m-cuenta", "#s-cuenta", "#p-cuenta", "#x-cuenta"].forEach(id => opcionesCuentas($(id)));
+  opcionesPosts();
+}
+function opcionesPosts() {
+  const c = E.cuentas.find(c => c.slug === $("#m-cuenta").value);
+  const v = $("#m-post").value;
+  const orden = { publicado: 0, listo: 1 };
+  const ps = (c ? c.posts : []).slice().sort((a, b) => (orden[a.estado] ?? 9) - (orden[b.estado] ?? 9) || a.nombre.localeCompare(b.nombre));
+  $("#m-post").innerHTML = ps.map(p => `<option value="${esc(p.nombre)}">${esc(p.nombre)} · ${esc(p.estado || "sin estado")}</option>`).join("") +
+    `<option value="__otro">otro (un post viejo sin carpeta)…</option>`;
+  if (v && [...$("#m-post").options].some(o => o.value === v)) $("#m-post").value = v;
+  $("#m-otro-l").hidden = $("#m-post").value !== "__otro";
+}
+$("#m-cuenta").addEventListener("change", opcionesPosts);
+$("#m-post").addEventListener("change", () => $("#m-otro-l").hidden = $("#m-post").value !== "__otro");
+
+const entero = (s, nombre) => {
+  s = String(s ?? "").replace(/[\s,_ ]/g, "");
+  if (s === "") return null;
+  if (!/^\d+$/.test(s)) throw new Error(`${nombre}: un entero ≥ 0`);
+  return Number(s);
+};
+
+$("#f-medicion").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const f = new FormData(ev.target), msg = $("#m-msg");
+  try {
+    const post = f.get("post") === "__otro" ? String(f.get("otro")).trim() : f.get("post");
+    const cuerpo = { cuenta: f.get("cuenta"), post, fecha: f.get("fecha") || null, nota: f.get("nota") || "" };
+    for (const k of ["vistas", "alcance", "likes", "comentarios", "guardados", "compartidos", "seguidores_ganados"]) cuerpo[k] = entero(f.get(k), k);
+    if (await enviar("/api/medicion", cuerpo, msg))
+      ["vistas", "alcance", "likes", "comentarios", "guardados", "compartidos", "seguidores_ganados", "nota"].forEach(k => ev.target.elements[k].value = "");
+  } catch (e) { msg.className = "msg error"; msg.textContent = e.message; }
+});
+
+$("#f-seguidores").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const f = new FormData(ev.target), msg = $("#s-msg");
+  try {
+    const n = entero(f.get("seguidores"), "seguidores");
+    if (n == null) throw new Error("seguidores: falta el número");
+    if (await enviar("/api/seguidores", { cuenta: f.get("cuenta"), seguidores: n, fecha: f.get("fecha") || null, nota: f.get("nota") || "" }, msg))
+      ev.target.elements.seguidores.value = "";
+  } catch (e) { msg.className = "msg error"; msg.textContent = e.message; }
+});
+
+$("#f-pedido").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const f = new FormData(ev.target);
+  const formato = f.get("formato");
+  const idea = String(f.get("idea")).trim() + (formato === "reel" ? "" : ` (formato: ${formato})`);
+  if (await enviar("/api/pedido", { cuenta: f.get("cuenta"), idea }, $("#p-msg"))) ev.target.elements.idea.value = "";
+});
+
+// ---------- tablas
+function pintarMediciones() {
+  const ms = E.mediciones.slice(-25).reverse();
+  const nombre = s => (E.cuentas.find(c => c.slug === s) || { nombre: s }).nombre;
+  $("#t-mediciones").innerHTML = ms.length ? `<thead><tr><th>Fecha</th><th>Cuenta</th><th>Post</th><th class="n">Vistas</th><th class="n">Likes</th><th class="n">Coment.</th><th class="n">Guard.</th><th class="n">Compart.</th><th>Nota</th></tr></thead><tbody>` +
+    ms.map(m => `<tr><td>${esc(m.fecha)}</td><td>${esc(nombre(m.cuenta))}</td><td>${esc(m.post)}</td><td class="n">${miles(m.vistas)}</td><td class="n">${miles(m.likes)}</td><td class="n">${miles(m.comentarios)}</td><td class="n">${miles(m.guardados)}</td><td class="n">${miles(m.compartidos)}</td><td>${esc(m.nota)}</td></tr>`).join("") + "</tbody>"
+    : `<tbody><tr><td class="vacio">Todavía no hay mediciones.</td></tr></tbody>`;
+}
+
+function pintarPedidos() {
+  const filas = E.cuentas.flatMap(c => c.pedidos.map(p => ({ ...p, cuenta_nombre: c.nombre }))).reverse();
+  $("#pedidos").innerHTML = filas.length ? `<table><tbody>` + filas.map(p =>
+    `<tr><td><span class="chip">${esc(p.estado)}</span></td><td>${esc(p.idea)}<div class="handle">${esc(p.id)} · ${esc(p.cuenta_nombre)} · ${esc(p.fecha)}${p.post ? " → " + esc(p.post) : ""}</div></td></tr>`).join("") + `</tbody></table>`
+    : `<div class="vacio">Sin pedidos todavía.</div>`;
+}
+
+function pintarPosts() {
+  const c = E.cuentas.find(c => c.slug === $("#x-cuenta").value) || E.cuentas[0];
+  if (!c) return;
+  const filtro = $("#x-estado").value;
+  const rc = E.resumen.cuentas.find(r => r.slug === c.slug);
+  const ultima = n => (rc.posts.find(p => p.post === n) || {}).ultima;
+  const ps = c.posts.filter(p => !filtro || p.estado === filtro);
+  $("#t-posts").innerHTML = `<thead><tr><th>Post</th><th>Estado</th><th class="n">Vistas</th><th class="n">Likes</th><th>Medido</th><th></th></tr></thead><tbody>` +
+    (ps.length ? ps.map(p => {
+      const m = ultima(p.nombre);
+      const accion = p.estado === "listo"
+        ? `<form class="acciones" data-subir="${esc(p.nombre)}"><input name="enlace" placeholder="https://www.instagram.com/reel/…" style="max-width:240px"><button class="btn sec">Ya lo subí</button></form>`
+        : "";
+      return `<tr><td><b>${esc(p.titulo || p.nombre)}</b><div class="handle">${esc(p.nombre)}</div></td><td><span class="chip ${esc(p.estado || "")}">${esc(p.estado || "sin estado")}</span></td>` +
+        `<td class="n">${miles(m && m.vistas)}</td><td class="n">${miles(m && m.likes)}</td><td>${m ? esc(m.fecha) : "—"}</td><td>${accion}</td></tr>`;
+    }).join("") : `<tr><td colspan="6" class="vacio">Ningún post con ese estado.</td></tr>`) + "</tbody>";
+  document.querySelectorAll("[data-subir]").forEach(f => f.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const post = f.dataset.subir, enlace = f.elements.enlace.value.trim();
+    if (!confirm(`¿Marcar «${post}» como publicado hoy${enlace ? " con ese enlace" : " (enlace pendiente)"}?`)) return;
+    const msg = document.createElement("span"); f.appendChild(msg);
+    await enviar("/api/publicado", { cuenta: c.slug, post, enlace: enlace || null }, msg);
+  }));
+}
+$("#x-cuenta").addEventListener("change", pintarPosts);
+$("#x-estado").addEventListener("change", pintarPosts);
+
+cargar();
+</script>
+</body>
+</html>

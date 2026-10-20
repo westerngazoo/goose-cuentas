@@ -14,10 +14,12 @@
 //! Nada de aquí publica en Instagram ni lee su API: los números son los que el
 //! dueño copia de Instagram, con la fecha en que los copió.
 
+pub mod acciones;
 pub mod estadisticas;
 pub mod publicado;
 pub mod registro;
 pub mod resumen;
+pub mod ui;
 pub mod vault;
 
 /// Un identificador corto: minúsculas ASCII, dígitos y guiones, sin guion al
