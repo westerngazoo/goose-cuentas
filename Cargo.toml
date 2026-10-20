@@ -1,0 +1,24 @@
+[package]
+name = "goose-cuentas"
+version = "0.1.0"
+edition = "2021"
+description = "La administración local de las cuentas de la casa: el tablero de sus posts, los pedidos de reels y las estadísticas que el dueño captura a mano en su vault personal"
+publish = false
+
+[lib]
+name = "goose_cuentas"
+path = "src/lib.rs"
+
+[[bin]]
+name = "cuentas"
+path = "src/main.rs"
+
+[dependencies]
+# El tablero de guion-video-creator (R-0013): las cuentas de cada repo, sus
+# posts, su estado y los encargos. Se consume, no se copia; Cargo.lock fija
+# el commit.
+guion-tablero = { git = "https://github.com/westerngazoo/guion-video-creator", branch = "main" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+csv = "1"
