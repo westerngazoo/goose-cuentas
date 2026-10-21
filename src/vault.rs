@@ -368,7 +368,8 @@ pub const REGISTRO: &str = r#"# El registro de las cuentas de la casa (goose-cue
 # nombre    — la cuenta tal como la declara el `guion-cuentas.toml` de su repo.
 # instagram — el usuario, sin @ (vacío mientras no esté reservado).
 # repo      — el repo donde vive su contenido: `~/` es la carpeta de inicio; una ruta
-#             relativa es relativa a esta carpeta.
+#             relativa es relativa a esta carpeta. Desde el 2026-10-21 las cuatro
+#             cuentas viven en rotorf-sico (fbf en rotorf-sico/fbf/).
 version = 1
 
 [[cuenta]]
@@ -381,7 +382,7 @@ repo = "~/code/rotorf-sico"
 slug = "fbf"
 nombre = "fisicobuenfisico"
 instagram = "fisicobuenfisico"
-repo = "~/code/fisicobuenfisico"
+repo = "~/code/rotorf-sico"
 
 [[cuenta]]
 slug = "pmmo"
@@ -516,12 +517,6 @@ mod tests {
         )
         .unwrap();
         assert_eq!(r.cuentas.len(), 4);
-        assert_eq!(
-            r.repos(),
-            [
-                PathBuf::from("/home/g/code/rotorf-sico"),
-                PathBuf::from("/home/g/code/fisicobuenfisico")
-            ]
-        );
+        assert_eq!(r.repos(), [PathBuf::from("/home/g/code/rotorf-sico")]);
     }
 }
