@@ -10,16 +10,23 @@
 //! | `POST /api/seguidores` | una medición de seguidores |
 //! | `POST /api/pedido` | `{"cuenta","idea"}` → el encargo |
 //! | `POST /api/publicado` | `{"cuenta","post","enlace"?,"fecha"?}` → la línea nueva |
+//! | `GET /api/orden` | las secciones de `publicar/ORDEN.md` con sus paquetes |
+//! | `POST /api/orden/publicado` | `{"carpeta","enlace"?,"fecha"?}` → ORDEN.md y el README del post |
+//! | `GET /archivo?ruta=publicar/…` | un MP4, PNG o TXT del paquete (con `Range`; `&descargar=1` lo baja) |
 //!
 //! Dos defensas baratas contra una página ajena que le hable a localhost: el
 //! `Host` tiene que ser `127.0.0.1:<puerto>` o `localhost:<puerto>` (contra el
 //! DNS rebinding), y todo POST viaja como `application/json` (un formulario
 //! ajeno no puede mandarlo sin una consulta CORS previa, que aquí no se
-//! contesta). [`responder`] es todo el enrutador y no toca sockets, así que se
-//! prueba sin red.
+//! contesta). `/archivo` solo sirve MP4, PNG y TXT de dentro de `publicar/`.
+//! [`responder`] es todo el enrutador y no toca sockets, así que se prueba sin
+//! red. Cada conexión va en su hilo (un video no frena al resto) y las
+//! escrituras pasan de una en una.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -39,6 +46,8 @@ pub const PAGINA: &str = include_str!("ui.html");
 pub struct Peticion {
     pub metodo: String,
     pub ruta: String,
+    pub query: Vec<(String, String)>,
+    pub rango: Option<String>,
     pub host: String,
     pub tipo: String,
     pub cuerpo: Vec<u8>,
@@ -50,6 +59,7 @@ pub struct Respuesta {
     pub estado: u16,
     pub tipo: &'static str,
     pub cuerpo: Vec<u8>,
+    pub extra: Vec<(&'static str, String)>,
 }
 
 impl Respuesta {
@@ -58,6 +68,7 @@ impl Respuesta {
             estado,
             tipo: "application/json; charset=utf-8",
             cuerpo: v.to_string().into_bytes(),
+            extra: Vec::new(),
         }
     }
 
@@ -124,6 +135,16 @@ struct PublicadoIn {
     fecha: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OrdenIn {
+    carpeta: String,
+    #[serde(default)]
+    enlace: Option<String>,
+    #[serde(default)]
+    fecha: Option<String>,
+}
+
 fn leer<T: for<'de> Deserialize<'de>>(p: &Peticion) -> Result<T, Respuesta> {
     serde_json::from_slice(&p.cuerpo).map_err(|e| Respuesta::error(400, &e.to_string()))
 }
@@ -149,9 +170,23 @@ pub fn responder(vault: &Vault, puerto: u16, hoy: &str, p: &Peticion) -> Respues
                 estado: 200,
                 tipo: "text/html; charset=utf-8",
                 cuerpo: PAGINA.as_bytes().to_vec(),
+                extra: Vec::new(),
             }
         }
         ("GET", "/api/estado") => estado(vault, hoy),
+        ("GET", "/api/orden") => acciones::orden(vault).map(|(raiz, secciones)| {
+            json!({ "raiz": raiz.display().to_string(), "hoy": hoy, "secciones": secciones })
+        }),
+        ("GET", "/archivo") => return archivo(vault, p),
+        ("POST", "/api/orden/publicado") => match leer::<OrdenIn>(p) {
+            Ok(x) => {
+                let fecha = vacio(x.fecha).unwrap_or_else(|| hoy.to_string());
+                let enlace = vacio(x.enlace);
+                acciones::marcar_orden(vault, &x.carpeta, &fecha, enlace.as_deref())
+                    .map(|hecho| json!({ "ok": hecho.join(" · ") }))
+            }
+            Err(r) => return r,
+        },
         ("POST", "/api/medicion") => match leer::<MedicionIn>(p) {
             Ok(m) => {
                 let m = Medicion {
@@ -204,7 +239,11 @@ pub fn responder(vault: &Vault, puerto: u16, hoy: &str, p: &Peticion) -> Respues
             }
             Err(r) => return r,
         },
-        (_, "/" | "/api/estado" | "/api/medicion" | "/api/seguidores" | "/api/pedido" | "/api/publicado") => {
+        (
+            _,
+            "/" | "/api/estado" | "/api/medicion" | "/api/seguidores" | "/api/pedido"
+            | "/api/publicado" | "/api/orden" | "/api/orden/publicado" | "/archivo",
+        ) => {
             return Respuesta::error(405, "método no permitido")
         }
         _ => return Respuesta::error(404, "no existe"),
@@ -230,6 +269,135 @@ fn estado(vault: &Vault, hoy: &str) -> Result<Value, String> {
     }))
 }
 
+fn param<'a>(p: &'a Peticion, k: &str) -> Option<&'a str> {
+    p.query
+        .iter()
+        .find(|(n, _)| n == k)
+        .map(|(_, v)| v.as_str())
+}
+
+/// Un archivo de un paquete de `publicar/`: solo MP4, PNG o TXT, y solo de
+/// dentro de esa carpeta (ni `..` ni enlaces que salgan de ella).
+fn archivo(vault: &Vault, p: &Peticion) -> Respuesta {
+    let Some(ruta) = param(p, "ruta") else {
+        return Respuesta::error(400, "falta ?ruta=");
+    };
+    let tipo = match Path::new(ruta).extension().and_then(|e| e.to_str()) {
+        Some("mp4") => "video/mp4",
+        Some("png") => "image/png",
+        Some("txt") => "text/plain; charset=utf-8",
+        _ => return Respuesta::error(403, "solo MP4, PNG o TXT"),
+    };
+    let reg = match crate::registro::Registro::leer(&vault.registro()) {
+        Ok(r) => r,
+        Err(e) => return Respuesta::error(400, &e),
+    };
+    let raiz = match acciones::orden_md(&reg) {
+        Ok((r, _)) => r,
+        Err(e) => return Respuesta::error(404, &e),
+    };
+    let base = std::fs::canonicalize(raiz.join("publicar"));
+    let f = std::fs::canonicalize(raiz.join(ruta));
+    let (Ok(base), Ok(f)) = (base, f) else {
+        return Respuesta::error(404, "no existe");
+    };
+    if !f.starts_with(&base) || !f.is_file() {
+        return Respuesta::error(403, "fuera de publicar/");
+    }
+    let datos = match std::fs::read(&f) {
+        Ok(d) => d,
+        Err(e) => return Respuesta::error(404, &e.to_string()),
+    };
+    let total = datos.len();
+    let mut extra = vec![("Accept-Ranges", "bytes".to_string())];
+    if param(p, "descargar").is_some() {
+        let nombre = f
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("archivo")
+            .replace('"', "");
+        extra.push((
+            "Content-Disposition",
+            format!("attachment; filename=\"{nombre}\""),
+        ));
+    }
+    if let Some((a, b)) = p.rango.as_deref().and_then(|r| rango(r, total)) {
+        extra.push(("Content-Range", format!("bytes {a}-{b}/{total}")));
+        return Respuesta {
+            estado: 206,
+            tipo,
+            cuerpo: datos[a..=b].to_vec(),
+            extra,
+        };
+    }
+    Respuesta {
+        estado: 200,
+        tipo,
+        cuerpo: datos,
+        extra,
+    }
+}
+
+/// `bytes=a-b`, `bytes=a-` o `bytes=-n` dentro de `total` bytes.
+fn rango(r: &str, total: usize) -> Option<(usize, usize)> {
+    let (a, b) = r
+        .strip_prefix("bytes=")?
+        .split(',')
+        .next()?
+        .split_once('-')?;
+    let (a, b) = (a.trim(), b.trim());
+    if total == 0 {
+        return None;
+    }
+    let (ini, fin) = if a.is_empty() {
+        let n: usize = b.parse().ok()?;
+        (total.saturating_sub(n), total - 1)
+    } else {
+        let ini: usize = a.parse().ok()?;
+        let fin = if b.is_empty() {
+            total - 1
+        } else {
+            b.parse::<usize>().ok()?.min(total - 1)
+        };
+        (ini, fin)
+    };
+    (ini <= fin && ini < total).then_some((ini, fin))
+}
+
+/// `%XX` y `+` decodificados.
+fn decodificar(s: &str) -> String {
+    let hex = |c: u8| (c as char).to_digit(16).map(|d| d as u8);
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        match (
+            b[i],
+            b.get(i + 1).copied().and_then(hex),
+            b.get(i + 2).copied().and_then(hex),
+        ) {
+            (b'+', _, _) => out.push(b' '),
+            (b'%', Some(h), Some(l)) => {
+                out.push(h * 16 + l);
+                i += 2;
+            }
+            (c, _, _) => out.push(c),
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn query(q: &str) -> Vec<(String, String)> {
+    q.split('&')
+        .filter(|s| !s.is_empty())
+        .map(|kv| {
+            let (k, v) = kv.split_once('=').unwrap_or((kv, ""));
+            (decodificar(k), decodificar(v))
+        })
+        .collect()
+}
+
 const MAX_CUERPO: usize = 64 * 1024;
 
 fn leer_peticion(s: &TcpStream) -> Result<Peticion, String> {
@@ -239,8 +407,10 @@ fn leer_peticion(s: &TcpStream) -> Result<Peticion, String> {
     let mut partes = linea.split_whitespace();
     let metodo = partes.next().ok_or("petición vacía")?.to_string();
     let objetivo = partes.next().ok_or("sin ruta")?;
-    let ruta = objetivo.split('?').next().unwrap_or("/").to_string();
+    let (ruta, q) = objetivo.split_once('?').unwrap_or((objetivo, ""));
+    let (ruta, query) = (decodificar(ruta), query(q));
     let (mut host, mut tipo, mut largo) = (String::new(), String::new(), 0usize);
+    let mut rango = None;
     loop {
         let mut h = String::new();
         if r.read_line(&mut h).map_err(|e| e.to_string())? == 0 {
@@ -256,6 +426,7 @@ fn leer_peticion(s: &TcpStream) -> Result<Peticion, String> {
                 "host" => host = v.to_string(),
                 "content-type" => tipo = v.to_ascii_lowercase(),
                 "content-length" => largo = v.parse().map_err(|_| "content-length")?,
+                "range" => rango = Some(v.to_string()),
                 _ => {}
             }
         }
@@ -268,6 +439,8 @@ fn leer_peticion(s: &TcpStream) -> Result<Peticion, String> {
     Ok(Peticion {
         metodo,
         ruta,
+        query,
+        rango,
         host,
         tipo,
         cuerpo,
@@ -277,6 +450,7 @@ fn leer_peticion(s: &TcpStream) -> Result<Peticion, String> {
 fn escribir(mut s: &TcpStream, r: &Respuesta) -> std::io::Result<()> {
     let razon = match r.estado {
         200 => "OK",
+        206 => "Partial Content",
         400 => "Bad Request",
         403 => "Forbidden",
         404 => "Not Found",
@@ -286,17 +460,29 @@ fn escribir(mut s: &TcpStream, r: &Respuesta) -> std::io::Result<()> {
     };
     write!(
         s,
-        "HTTP/1.1 {} {razon}\r\nContent-Type: {}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 {} {razon}\r\nContent-Type: {}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n",
         r.estado,
         r.tipo,
         r.cuerpo.len()
     )?;
+    for (k, v) in &r.extra {
+        write!(s, "{k}: {v}\r\n")?;
+    }
+    write!(s, "\r\n")?;
     s.write_all(&r.cuerpo)?;
     s.flush()
 }
 
+/// Las escrituras (los POST) van de una en una, aunque cada conexión tenga
+/// su hilo.
+static ESCRIBIR: Mutex<()> = Mutex::new(());
+
 fn atender(vault: &Vault, puerto: u16, s: &TcpStream) {
     let r = match leer_peticion(s) {
+        Ok(p) if p.metodo == "POST" => {
+            let _turno = ESCRIBIR.lock().unwrap_or_else(|e| e.into_inner());
+            responder(vault, puerto, &guion_tablero::fecha::hoy(), &p)
+        }
         Ok(p) => responder(vault, puerto, &guion_tablero::fecha::hoy(), &p),
         Err(e) => Respuesta::error(400, &e),
     };
@@ -312,8 +498,10 @@ pub fn servir(vault: &Vault, puerto: u16) -> Result<(), String> {
     })?;
     println!("cuentas ui: http://127.0.0.1:{puerto}  (Ctrl-C para cerrar)");
     println!("vault: {}", vault.cuentas().display());
+    let vault = Arc::new(vault.clone());
     for s in l.incoming().flatten() {
-        atender(vault, puerto, &s);
+        let v = Arc::clone(&vault);
+        std::thread::spawn(move || atender(&v, puerto, &s));
     }
     Ok(())
 }
@@ -324,9 +512,12 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     fn pet(metodo: &str, ruta: &str, cuerpo: &str) -> Peticion {
+        let (ruta, q) = ruta.split_once('?').unwrap_or((ruta, ""));
         Peticion {
             metodo: metodo.into(),
             ruta: ruta.into(),
+            query: query(q),
+            rango: None,
             host: "127.0.0.1:7171".into(),
             tipo: "application/json".into(),
             cuerpo: cuerpo.as_bytes().to_vec(),
@@ -478,6 +669,99 @@ mod tests {
         assert!(std::fs::read_to_string(v.resumen_md())
             .unwrap()
             .contains("| Rotor | 390 |"));
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn rangos() {
+        assert_eq!(rango("bytes=0-9", 100), Some((0, 9)));
+        assert_eq!(rango("bytes=90-", 100), Some((90, 99)));
+        assert_eq!(rango("bytes=-10", 100), Some((90, 99)));
+        assert_eq!(rango("bytes=50-500", 100), Some((50, 99)));
+        assert_eq!(rango("bytes=200-", 100), None);
+        assert_eq!(rango("items=0-1", 100), None);
+    }
+
+    #[test]
+    fn el_orden_sus_archivos_y_marcar() {
+        let (v, d) = mundo("orden");
+        let repo = d.join("repo");
+        let pk = repo.join("publicar/rotor/deriva");
+        std::fs::create_dir_all(&pk).unwrap();
+        std::fs::write(pk.join("deriva.mp4"), (0u8..=255).collect::<Vec<u8>>()).unwrap();
+        std::fs::write(pk.join("deriva-portada.png"), b"png").unwrap();
+        std::fs::write(pk.join("caption.txt"), "¿Deriva?\n\n#karting #f1\n").unwrap();
+        std::fs::write(pk.join("alt-text.txt"), "Un kart.\n").unwrap();
+        std::fs::write(repo.join("secreto.txt"), "no").unwrap();
+        std::fs::write(
+            repo.join("publicar/ORDEN.md"),
+            "## @rotorfisicoracing\n\n### 1. ¿Deriva?\n\n- **Carpeta:** `publicar/rotor/deriva/`\n\n- [ ] Publicado · fecha: ______ · enlace: ______\n",
+        )
+        .unwrap();
+        // el README del post apunta su paquete a esa carpeta
+        std::fs::write(
+            repo.join("guion-cuentas.toml"),
+            "[[cuenta]]\nnombre = \"Rotor\"\nposts = [\"posts/*\"]\npublicar = [\"publicar/rotor\"]\n",
+        )
+        .unwrap();
+        let hoy = "2026-10-21";
+        let r = responder(&v, 7171, hoy, &pet("GET", "/api/orden", ""));
+        assert_eq!(r.estado, 200, "{}", r.texto());
+        let e: Value = serde_json::from_slice(&r.cuerpo).unwrap();
+        let p0 = &e["secciones"][0]["paquetes"][0];
+        assert_eq!(p0["titulo"], "¿Deriva?");
+        assert_eq!(p0["video"], "publicar/rotor/deriva/deriva.mp4");
+        assert_eq!(p0["caption"], "¿Deriva?\n\n#karting #f1");
+        assert_eq!(p0["hashtags"], 2);
+        assert_eq!(p0["falta"].as_array().unwrap().len(), 0);
+
+        let mut g = pet(
+            "GET",
+            "/archivo?ruta=publicar%2Frotor%2Fderiva%2Fderiva.mp4",
+            "",
+        );
+        let r = responder(&v, 7171, hoy, &g);
+        assert_eq!((r.estado, r.cuerpo.len(), r.tipo), (200, 256, "video/mp4"));
+        g.rango = Some("bytes=10-19".into());
+        let r = responder(&v, 7171, hoy, &g);
+        assert_eq!(r.estado, 206);
+        assert_eq!(r.cuerpo, (10u8..20).collect::<Vec<u8>>());
+        for malo in [
+            "publicar/../secreto.txt",
+            "guion-cuentas.toml",
+            "publicar/ORDEN.md",
+        ] {
+            let r = responder(
+                &v,
+                7171,
+                hoy,
+                &pet("GET", &format!("/archivo?ruta={malo}"), ""),
+            );
+            assert_eq!(r.estado, 403, "{malo}");
+        }
+
+        let r = responder(
+            &v,
+            7171,
+            hoy,
+            &pet(
+                "POST",
+                "/api/orden/publicado",
+                r#"{"carpeta":"publicar/rotor/deriva","enlace":"https://www.instagram.com/reel/abc/"}"#,
+            ),
+        );
+        assert_eq!(r.estado, 200, "{}", r.texto());
+        assert!(
+            r.texto().contains("posts/deriva/README.md: publicado"),
+            "{}",
+            r.texto()
+        );
+        let orden = std::fs::read_to_string(repo.join("publicar/ORDEN.md")).unwrap();
+        assert!(orden.contains(
+            "- [x] Publicado · fecha: 2026-10-21 · enlace: https://www.instagram.com/reel/abc/"
+        ));
+        let readme = std::fs::read_to_string(repo.join("posts/deriva/README.md")).unwrap();
+        assert!(readme.contains("publicado (2026-10-21, https://www.instagram.com/reel/abc/)"));
         let _ = std::fs::remove_dir_all(d);
     }
 }

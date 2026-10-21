@@ -27,6 +27,7 @@ Qué se abstrae, en qué orden y qué queda en cada capa.
    - **Post:** sus mediciones en el tiempo, su estado, su paquete en
      `publicar/` y el botón «ya lo subí» (= `cuentas publicado`, con el enlace).
    - **Pedir un reel:** la cuenta, la idea (la pregunta) y el formato.
+1b. **Hecho: la pestaña Publicar.** `ORDEN.md` en la interfaz: el video, copiar el caption y el alt text, bajar los archivos y «Ya lo subí».
 2. **Correr los pedidos.** Una cola local que toma un encargo `pendiente` y
    abre una sesión de Claude Code en el repo de la cuenta con la skill
    `hacer-video`. El resultado llega a `listo`, nunca a `publicado`.
