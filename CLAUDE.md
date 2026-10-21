@@ -24,7 +24,7 @@ lee `README.md`, `docs/plan.md` y `docs/decisions.md`.
 ## Cómo está hecho
 
 - `src/vault.rs`: dónde está el vault (`--vault`, `$GOOSE_VAULT`, el config,
-  `~/vault/vault personal`) y lo que `iniciar` escribe.
+  `~/vaults/personal`) y lo que `iniciar` escribe.
 - `src/registro.rs`: `cuentas.toml`, con los repos resueltos (`~/` incluido).
 - `src/estadisticas.rs`: los dos CSV. Solo se agregan filas, y lo escrito se
   vuelve a leer antes de guardarlo.

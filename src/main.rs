@@ -33,7 +33,7 @@ uso: cuentas [--vault DIR] <comando>
   ui [--puerto N]                 la interfaz en http://127.0.0.1:7171 (solo en esta máquina)
 
 El vault es --vault, si no $GOOSE_VAULT, si no el que recordó `iniciar`
-(~/.config/goose-cuentas/config.toml), si no ~/vault/vault personal.
+(~/.config/goose-cuentas/config.toml), si no ~/vaults/personal (o una carpeta con «personal» en ~/vaults).
 La fecha por omisión es hoy. <cuenta> es el slug de cuentas/cuentas.toml.
 Después de cada medición se reescribe cuentas/resumen.md.";
 
