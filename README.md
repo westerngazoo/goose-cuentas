@@ -20,8 +20,15 @@ cd ~/projects                    # o ~/code: donde tengas tus repos
 git clone https://github.com/westerngazoo/goose-cuentas
 cd goose-cuentas
 cargo install --path .           # deja `cuentas` en ~/.cargo/bin
-cuentas iniciar --vault "$HOME/vaults/personal"   # una vez: crea cuentas/ y recuerda la ruta
+cuentas iniciar
 ```
+
+`iniciar` busca tu vault personal: en `~/vaults`, en la lista de vaults de
+Obsidian y en cualquier carpeta con `.obsidian/`. Si encuentra varios, te los
+lista y eliges uno con su número; la elección se guarda en
+`~/.config/goose-cuentas/config.toml`. También puedes nombrarlo directo:
+`cuentas iniciar --vault "<ruta>"`. En zsh no pongas comentarios con `#` en la
+misma línea; si lo haces, `cuentas` los ignora.
 
 Los repos de las cuentas (`rotorf-sico`, `fisicobuenfisico`) se buscan donde
 dice `cuentas/cuentas.toml`; si no están ahí, en `~/code`, `~/projects` y

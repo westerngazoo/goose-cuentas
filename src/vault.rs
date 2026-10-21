@@ -39,28 +39,127 @@ pub const CANDIDATOS: [&str; 6] = [
 /// tenga «personal» en el nombre.
 pub const CONTENEDORES: [&str; 5] = ["vaults", "Vaults", "vault", "Vault", "Documents/vaults"];
 
-/// El vault personal bajo `h`: un candidato que exista, si no una carpeta con
-/// «personal» en el nombre dentro de un contenedor.
+/// Dónde guarda Obsidian su lista de vaults (`obsidian.json`), según el
+/// sistema: macOS, Linux (normal y Flatpak) y Windows.
+pub fn obsidian_json(h: &Path) -> Vec<PathBuf> {
+    let mut v = vec![
+        h.join("Library/Application Support/obsidian/obsidian.json"),
+        h.join(".config/obsidian/obsidian.json"),
+        h.join(".var/app/md.obsidian.Obsidian/config/obsidian/obsidian.json"),
+    ];
+    if let Some(a) = std::env::var_os("APPDATA").filter(|a| !a.is_empty()) {
+        v.push(PathBuf::from(a).join("obsidian/obsidian.json"));
+    }
+    v
+}
+
+/// Los vaults que Obsidian conoce: las rutas de `obsidian.json`
+/// (`{"vaults": {"<id>": {"path": "…"}}}`), las que existan.
+pub fn vaults_de_obsidian(h: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for f in obsidian_json(h) {
+        let Ok(t) = std::fs::read_to_string(&f) else {
+            continue;
+        };
+        let Ok(j) = serde_json::from_str::<serde_json::Value>(&t) else {
+            continue;
+        };
+        let Some(vaults) = j.get("vaults").and_then(|v| v.as_object()) else {
+            continue;
+        };
+        for v in vaults.values() {
+            if let Some(p) = v.get("path").and_then(|p| p.as_str()) {
+                let p = PathBuf::from(p);
+                if p.is_dir() && !out.contains(&p) {
+                    out.push(p);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Todos los vaults que se encuentran: los de Obsidian, más cualquier carpeta
+/// con `.obsidian/` adentro, directamente bajo `h` o bajo un contenedor.
+pub fn descubrir(h: &Path) -> Vec<PathBuf> {
+    let mut out = vaults_de_obsidian(h);
+    let mut mirar = |d: PathBuf| {
+        let Ok(it) = std::fs::read_dir(&d) else {
+            return;
+        };
+        for e in it.flatten() {
+            let p = e.path();
+            if p.is_dir() && p.join(".obsidian").is_dir() && !out.contains(&p) {
+                out.push(p);
+            }
+        }
+    };
+    mirar(h.to_path_buf());
+    for c in CONTENEDORES {
+        mirar(h.join(c));
+    }
+    out.sort();
+    out
+}
+
+fn dice_personal(p: &Path) -> bool {
+    p.file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.to_lowercase().contains("personal"))
+}
+
+/// El vault personal bajo `h`: un candidato que exista; si no, dentro de un
+/// contenedor, una carpeta con «personal» en el nombre; si no, entre los
+/// vaults descubiertos ([`descubrir`]), el que diga «personal», o el único
+/// que haya.
 pub fn buscar(h: &Path) -> Option<PathBuf> {
     if let Some(p) = CANDIDATOS.iter().map(|c| h.join(c)).find(|p| p.is_dir()) {
         return Some(p);
     }
-    CONTENEDORES.iter().find_map(|c| {
+    let en_contenedor = CONTENEDORES.iter().find_map(|c| {
         let mut hijos: Vec<PathBuf> = std::fs::read_dir(h.join(c))
             .ok()?
             .flatten()
             .map(|e| e.path())
-            .filter(|p| {
-                p.is_dir()
-                    && p.file_name()
-                        .and_then(|n| n.to_str())
-                        .is_some_and(|n| n.to_lowercase().contains("personal"))
-            })
+            .filter(|p| p.is_dir() && dice_personal(p))
             .collect();
         hijos.sort();
         hijos.into_iter().next()
-    })
+    });
+    if en_contenedor.is_some() {
+        return en_contenedor;
+    }
+    let todos = descubrir(h);
+    let personales: Vec<&PathBuf> = todos.iter().filter(|p| dice_personal(p)).collect();
+    match (personales.len(), todos.len()) {
+        (1, _) => Some(personales[0].clone()),
+        (0, 1) => Some(todos[0].clone()),
+        _ => None,
+    }
 }
+
+/// El texto del error cuando no se encuentra el vault: dónde se buscó y, si
+/// se descubrió alguno, la lista numerada para elegir.
+pub fn explicar_no_encontrado(h: &Path) -> String {
+    let mut m = format!(
+        "no encuentro el vault personal (busqué ~/{}; dentro de ~/{}, una carpeta con \
+         «personal» en el nombre; y la lista de vaults de Obsidian)",
+        CANDIDATOS.join(", ~/"),
+        CONTENEDORES.join(", ~/")
+    );
+    let v = descubrir(h);
+    if v.is_empty() {
+        m.push_str(".\nNómbralo una vez con `cuentas iniciar --vault \"<ruta>\"`.");
+    } else {
+        m.push_str(".\nEstos vaults sí encontré:\n");
+        for (i, p) in v.iter().enumerate() {
+            m.push_str(&format!("  {}. {}\n", i + 1, p.display()));
+        }
+        m.push_str("Corre `cuentas iniciar` y elige uno, o `cuentas iniciar --vault \"<ruta>\"`.");
+    }
+    m
+}
+
 /// La carpeta de esta herramienta dentro del vault, si el config no dice otra.
 pub const CARPETA: &str = "cuentas";
 
@@ -149,15 +248,7 @@ impl Vault {
         } else {
             let h =
                 inicio.ok_or("no sé cuál es la carpeta de inicio; nombra el vault con --vault")?;
-            buscar(h).ok_or_else(|| {
-                format!(
-                    "no encuentro el vault (busqué ~/{} y, dentro de ~/{}, una carpeta con \
-                     «personal» en el nombre); nómbralo una vez con \
-                     `cuentas iniciar --vault \"<ruta>\"`",
-                    CANDIDATOS.join(", ~/"),
-                    CONTENEDORES.join(", ~/")
-                )
-            })?
+            buscar(h).ok_or_else(|| explicar_no_encontrado(h))?
         };
         Ok(Vault { raiz, carpeta })
     }
@@ -336,6 +427,34 @@ mod tests {
         assert_eq!(buscar(&h), Some(h.join("vaults/Mi Personal")));
         std::fs::create_dir_all(h.join("vaults/personal")).unwrap();
         assert_eq!(buscar(&h), Some(h.join("vaults/personal")));
+        let _ = std::fs::remove_dir_all(&h);
+    }
+
+    #[test]
+    fn descubre_los_vaults_de_obsidian_y_los_de_punto_obsidian() {
+        let h = std::env::temp_dir().join(format!("goose-cuentas-obs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&h);
+        let a = h.join("Documentos/Goose Notes");
+        let b = h.join("otros/trabajo");
+        std::fs::create_dir_all(a.join(".obsidian")).unwrap();
+        std::fs::create_dir_all(b.join(".obsidian")).unwrap();
+        std::fs::create_dir_all(h.join("Library/Application Support/obsidian")).unwrap();
+        std::fs::write(
+            h.join("Library/Application Support/obsidian/obsidian.json"),
+            format!(
+                r#"{{"vaults":{{"abc":{{"path":{:?},"ts":1,"open":true}},"def":{{"path":{:?}}},"ghi":{{"path":"/no/existe"}}}}}}"#,
+                a.display().to_string(),
+                b.display().to_string()
+            ),
+        )
+        .unwrap();
+        let v = descubrir(&h);
+        assert_eq!(v, vec![a.clone(), b.clone()]);
+        // sin «personal» y con dos, no adivina; con uno solo, lo toma
+        assert_eq!(buscar(&h), None);
+        assert!(explicar_no_encontrado(&h).contains("1. "));
+        std::fs::remove_dir_all(&b).unwrap();
+        assert_eq!(buscar(&h), Some(a));
         let _ = std::fs::remove_dir_all(&h);
     }
 
