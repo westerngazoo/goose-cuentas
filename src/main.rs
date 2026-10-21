@@ -114,6 +114,35 @@ impl Args {
     }
 }
 
+/// Sin vault conocido: la lista de los que hay y, si hay terminal, la
+/// pregunta. Devuelve la ruta elegida.
+fn elegir_vault(h: &Path) -> Option<std::path::PathBuf> {
+    use std::io::{BufRead, IsTerminal, Write};
+    let v = goose_cuentas::vault::descubrir(h);
+    if v.is_empty() || !std::io::stdin().is_terminal() {
+        return None;
+    }
+    println!("No sé cuál es tu vault personal. Estos encontré:");
+    for (i, p) in v.iter().enumerate() {
+        println!("  {}. {}", i + 1, p.display());
+    }
+    print!(
+        "¿Cuál? [1-{}] (o pega una ruta; Enter para salir) ",
+        v.len()
+    );
+    std::io::stdout().flush().ok();
+    let mut linea = String::new();
+    std::io::stdin().lock().read_line(&mut linea).ok()?;
+    let t = linea.trim();
+    if t.is_empty() {
+        return None;
+    }
+    match t.parse::<usize>() {
+        Ok(n) if (1..=v.len()).contains(&n) => Some(v[n - 1].clone()),
+        _ => Some(goose_cuentas::vault::expandir(t, Some(h)).ok()?),
+    }
+}
+
 fn correr(v: Vec<String>) -> Result<(), String> {
     let a = Args::de(v)?;
     if a.pos.is_empty() || a.tiene("--help") || a.tiene("-h") {
@@ -126,7 +155,20 @@ fn correr(v: Vec<String>) -> Result<(), String> {
         Some(r) => Config::leer(r)?,
         None => Config::default(),
     };
-    let vault = Vault::localizar(a.valor("--vault").map(Path::new), &config, casa.as_deref())?;
+    let vault = match Vault::localizar(a.valor("--vault").map(Path::new), &config, casa.as_deref())
+    {
+        Ok(v) => v,
+        // `cuentas iniciar` a secas, sin vault conocido: se elige entre los que hay
+        Err(e) if a.pos == ["iniciar"] && a.valor("--vault").is_none() => {
+            let h = casa.as_deref().ok_or(e.clone())?;
+            let elegido = elegir_vault(h).ok_or(e)?;
+            Vault::localizar(Some(&elegido), &config, casa.as_deref())?
+        }
+        Err(e) => return Err(e),
+    };
+    // el vault elegido a mano (o `--vault`) se recuerda en el config
+    let vault_nombrado =
+        a.pos == ["iniciar"] && (a.valor("--vault").is_some() || config.vault.is_none());
     let hoy = guion_tablero::fecha::hoy();
     let fecha = a.valor("--fecha").unwrap_or(&hoy).to_string();
     let pos: Vec<&str> = a.pos.iter().map(String::as_str).collect();
@@ -135,8 +177,9 @@ fn correr(v: Vec<String>) -> Result<(), String> {
         ["iniciar"] => {
             a.solo(&["--vault"])?;
             let creados = vault.iniciar()?;
-            if let (Some(v), Some(r)) = (a.valor("--vault"), &config_ruta) {
-                let raiz = std::fs::canonicalize(v).map_err(|e| format!("{v}: {e}"))?;
+            if let (true, Some(r)) = (vault_nombrado, &config_ruta) {
+                let v = &vault.raiz;
+                let raiz = std::fs::canonicalize(v).map_err(|e| format!("{}: {e}", v.display()))?;
                 let nuevo = Config {
                     vault: Some(raiz.display().to_string()),
                     ..config.clone()
