@@ -35,8 +35,9 @@ las notas en otra carpeta (por ejemplo `Areas/Cuentas`), escribe ahí
 cuentas ui                 # abre http://127.0.0.1:7171 en tu navegador
 ```
 
-Solo se abre en tu propia máquina (127.0.0.1). Tiene cuatro pestañas:
+Solo se abre en tu propia máquina (127.0.0.1). Tiene cinco pestañas:
 
+- **Publicar** (la que abre): lo que dice `publicar/ORDEN.md`, cuenta por cuenta y en orden. Cada reel trae su video para verlo ahí mismo, su caption y su texto alternativo con un botón para copiarlos, los botones para bajar el video y la portada, y «Ya lo subí» con el enlace. Ese botón marca la entrada en `ORDEN.md` y el README del post. El siguiente de cada cuenta va resaltado.
 - **Tablero:** cada cuenta con sus seguidores, vistas, likes e interacción; una gráfica de seguidores en el tiempo y otra de vistas por post.
 - **Capturar:** las cifras de un post (vistas, alcance, likes, comentarios, guardados, compartidos, seguidores ganados) y los seguidores de una cuenta.
 - **Pedir reel:** la cuenta, el formato y la pregunta.

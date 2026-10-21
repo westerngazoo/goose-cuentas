@@ -150,6 +150,41 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
 .chip.listo { border-color: var(--text-secondary); color: var(--text-primary); }
 .nota { color: var(--text-muted); font-size: 12px; margin: 6px 0 0; }
 .aviso { color: var(--error); font-size: 12px; margin-top: 8px; }
+.filtros { margin-bottom: 14px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chips button {
+  font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--surface-1);
+  color: var(--text-secondary); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.chips button[aria-pressed="true"] { border-color: var(--series-1); color: var(--text-primary); font-weight: 600; }
+.check { display: flex; flex-direction: row; align-items: center; gap: 6px; font-size: 13px; }
+.check input { width: auto; }
+.seccion-o { margin-bottom: 28px; }
+.seccion-o > h2 { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.seccion-o details { font-size: 13px; color: var(--text-secondary); margin: 0 0 10px; }
+.seccion-o details pre { white-space: pre-wrap; font: inherit; margin: 6px 0 0; }
+.paquete { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; margin-bottom: 12px; }
+.paquete.siguiente { border-color: var(--series-1); box-shadow: 0 0 0 1px var(--series-1); }
+.paquete.hecho { opacity: .72; }
+.paquete video { width: 220px; aspect-ratio: 9 / 16; background: #000; border-radius: 8px; display: block; }
+.paquete .sinvideo { width: 220px; aspect-ratio: 9 / 16; border: 1px dashed var(--line); border-radius: 8px; display: grid; place-items: center; color: var(--text-muted); font-size: 12px; }
+.paquete h3 { margin: 0 0 4px; font-size: 16px; }
+.num { display: inline-grid; place-items: center; min-width: 26px; height: 26px; border-radius: 999px; background: var(--surface-0); border: 1px solid var(--line); font-size: 12px; font-weight: 700; margin-right: 6px; }
+.siguiente .num { background: var(--series-1); color: #fff; border-color: var(--series-1); }
+.texto { margin-top: 10px; }
+.texto .fila { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+.texto pre {
+  white-space: pre-wrap; margin: 0; font: 13px/1.45 ui-sans-serif, system-ui, sans-serif; background: var(--surface-0);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; max-height: 160px; overflow: auto;
+}
+.btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+.btn.chico { padding: 6px 12px; font-size: 13px; }
+a.btn { text-decoration: none; display: inline-block; }
+.avisos { color: var(--error); font-size: 12px; margin-top: 6px; }
+@media (max-width: 700px) {
+  .paquete { grid-template-columns: 1fr; }
+  .paquete video, .paquete .sinvideo { width: min(260px, 100%); }
+}
 @media (max-width: 560px) {
   header, nav, main { padding-left: 16px; padding-right: 16px; }
   .stats { grid-template-columns: repeat(2, 1fr); }
@@ -162,13 +197,23 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
   <span class="vault" id="vault"></span>
 </header>
 <nav role="tablist">
-  <button role="tab" data-tab="tablero" aria-selected="true">Tablero</button>
+  <button role="tab" data-tab="publicar" aria-selected="true">Publicar</button>
+  <button role="tab" data-tab="tablero" aria-selected="false">Tablero</button>
   <button role="tab" data-tab="capturar" aria-selected="false">Capturar</button>
   <button role="tab" data-tab="pedir" aria-selected="false">Pedir reel</button>
   <button role="tab" data-tab="posts" aria-selected="false">Posts</button>
 </nav>
 <main>
-  <section id="tablero">
+  <section id="publicar">
+    <div class="acciones filtros">
+      <div class="chips" id="o-cuentas" role="group" aria-label="Cuenta"></div>
+      <label class="check"><input type="checkbox" id="o-todos"> mostrar los ya publicados</label>
+      <span class="handle" id="o-resumen"></span>
+    </div>
+    <div id="o-secciones"></div>
+  </section>
+
+  <section id="tablero" hidden>
     <div class="grid" id="tarjetas"></div>
     <h2>Seguidores en el tiempo</h2>
     <div class="grid" id="seguidores-graficas"></div>
@@ -276,7 +321,7 @@ function abrir(nombre) {
   try { localStorage.setItem("cuentas-tab", nombre); } catch (_) {}
 }
 tabs.forEach(b => b.addEventListener("click", () => abrir(b.dataset.tab)));
-try { const t = localStorage.getItem("cuentas-tab"); if (t && $("#" + t)) abrir(t); } catch (_) {}
+try { const t = localStorage.getItem("cuentas-tab"); if (t && $("#" + t)) abrir(t); else abrir("publicar"); } catch (_) { abrir("publicar"); }
 
 // ---------- tooltip
 const tip = $("#tip");
@@ -529,6 +574,89 @@ function pintarPosts() {
 }
 $("#x-cuenta").addEventListener("change", pintarPosts);
 $("#x-estado").addEventListener("change", pintarPosts);
+
+// ---------- publicar (ORDEN.md)
+let O = null, filtroCuenta = "";
+try { filtroCuenta = localStorage.getItem("cuentas-orden-cuenta") || ""; } catch (_) {}
+async function cargarOrden() {
+  const r = await fetch("/api/orden");
+  const j = await r.json();
+  if (!r.ok) { $("#o-secciones").innerHTML = `<div class="card aviso">${esc(j.error)}</div>`; return; }
+  O = j; pintarOrden();
+}
+async function copiar(texto, boton) {
+  try { await navigator.clipboard.writeText(texto); }
+  catch (_) {
+    const t = document.createElement("textarea"); t.value = texto; document.body.appendChild(t);
+    t.select(); document.execCommand("copy"); t.remove();
+  }
+  const antes = boton.textContent; boton.textContent = "¡Copiado!";
+  setTimeout(() => boton.textContent = antes, 1400);
+}
+const url = ruta => "/archivo?ruta=" + encodeURIComponent(ruta);
+function pintarOrden() {
+  const todos = $("#o-todos").checked;
+  const secs = O.secciones;
+  $("#o-cuentas").innerHTML = [["", "Todas"], ...secs.map(s => [s.titulo, s.titulo])]
+    .map(([v, t]) => `<button type="button" data-v="${esc(v)}" aria-pressed="${v === filtroCuenta}">${esc(t)}</button>`).join("");
+  $("#o-cuentas").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    filtroCuenta = b.dataset.v; try { localStorage.setItem("cuentas-orden-cuenta", filtroCuenta); } catch (_) {}
+    pintarOrden();
+  }));
+  const pend = secs.reduce((n, s) => n + s.paquetes.filter(p => !p.publicado).length, 0);
+  $("#o-resumen").textContent = `${pend} por subir en ${secs.length} cuentas`;
+  const html = secs.filter(s => !filtroCuenta || s.titulo === filtroCuenta).map(s => {
+    const sig = s.paquetes.findIndex(p => !p.publicado);
+    const quedan = s.paquetes.filter(p => !p.publicado).length;
+    const cards = s.paquetes.map((p, i) => ({ p, i })).filter(({ p }) => todos || !p.publicado).map(({ p, i }) => {
+      const clase = p.publicado ? "hecho" : (i === sig ? "siguiente" : "");
+      const estado = p.publicado
+        ? `<span class="chip publicado">publicado${p.fecha ? " · " + esc(p.fecha) : ""}</span>${p.enlace ? ` <a href="${esc(p.enlace)}" target="_blank" rel="noopener">ver</a>` : ""}`
+        : (i === sig ? `<span class="chip listo">el siguiente</span>` : `<span class="chip">por subir</span>`);
+      const video = p.video
+        ? `<video controls preload="metadata" ${p.portada ? `poster="${url(p.portada)}"` : ""} src="${url(p.video)}"></video>`
+        : `<div class="sinvideo">sin video</div>`;
+      const bloque = (nombre, texto, extra) => texto ? `<div class="texto"><div class="fila"><b>${nombre}</b><span class="handle">${extra || ""}</span><button class="btn chico" data-copiar="${nombre}">Copiar ${nombre.toLowerCase()}</button></div><pre>${esc(texto)}</pre></div>` : "";
+      const capInfo = p.caption ? `${miles(p.caracteres)} / 2${NBSP}200 caracteres · ${p.hashtags} hashtags` : "";
+      return `<div class="card paquete ${clase}" data-carpeta="${esc(p.carpeta)}">
+        <div>${video}</div>
+        <div>
+          <h3><span class="num">${i + 1}</span>${esc(p.titulo)}</h3>
+          <div>${estado}</div>
+          ${bloque("Caption", p.caption, capInfo)}
+          ${bloque("Alt text", p.alt, "Configuración avanzada → Accesibilidad")}
+          <div class="btns">
+            ${p.video ? `<a class="btn sec chico" href="${url(p.video)}&descargar=1">Bajar video</a>` : ""}
+            ${p.portada ? `<a class="btn sec chico" href="${url(p.portada)}&descargar=1">Bajar portada</a>` : ""}
+          </div>
+          ${p.falta.length ? `<div class="avisos">Falta: ${p.falta.map(esc).join(", ")}</div>` : ""}
+          ${!p.publicado || !p.enlace ? `<form class="acciones subir" style="margin-top:10px">
+            <input name="enlace" placeholder="enlace del reel (opcional)" style="max-width:300px">
+            <button class="btn chico">${p.publicado ? "Guardar enlace" : "Ya lo subí"}</button><span class="msg"></span></form>` : ""}
+        </div>
+      </div>`;
+    }).join("");
+    return `<div class="seccion-o"><h2>${esc(s.titulo)} <span class="handle">${quedan} por subir</span></h2>
+      ${s.nota ? `<details><summary>Notas de la cuenta</summary><pre>${esc(s.nota)}</pre></details>` : ""}
+      ${cards || `<div class="vacio">Nada por subir aquí. Activa «mostrar los ya publicados» para verlos.</div>`}</div>`;
+  }).join("");
+  $("#o-secciones").innerHTML = html;
+  document.querySelectorAll(".paquete").forEach(card => {
+    const p = O.secciones.flatMap(s => s.paquetes).find(x => x.carpeta === card.dataset.carpeta);
+    card.querySelectorAll("[data-copiar]").forEach(b => b.addEventListener("click", () =>
+      copiar(b.dataset.copiar === "Caption" ? p.caption : p.alt, b)));
+    const f = card.querySelector("form.subir");
+    if (f) f.addEventListener("submit", async ev => {
+      ev.preventDefault();
+      const enlace = f.elements.enlace.value.trim();
+      if (!p.publicado && !confirm(`¿Marcar «${p.titulo}» como publicado hoy?`)) return;
+      const ok = await enviar("/api/orden/publicado", { carpeta: p.carpeta, enlace: enlace || null }, f.querySelector(".msg"));
+      if (ok) await cargarOrden();
+    });
+  });
+}
+$("#o-todos").addEventListener("change", () => O && pintarOrden());
+cargarOrden();
 
 cargar();
 </script>

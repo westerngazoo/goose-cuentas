@@ -16,6 +16,7 @@
 
 pub mod acciones;
 pub mod estadisticas;
+pub mod orden;
 pub mod publicado;
 pub mod registro;
 pub mod resumen;
