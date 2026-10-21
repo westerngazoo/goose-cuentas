@@ -38,7 +38,12 @@ La fecha por omisión es hoy. <cuenta> es el slug de cuentas/cuentas.toml.
 Después de cada medición se reescribe cuentas/resumen.md.";
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    // zsh no trata `#` como comentario en la terminal (interactive_comments
+    // viene apagado): lo que va desde un `#` suelto se ignora, como en bash.
+    let args: Vec<String> = std::env::args()
+        .skip(1)
+        .take_while(|a| !a.starts_with('#'))
+        .collect();
     match correr(args) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
