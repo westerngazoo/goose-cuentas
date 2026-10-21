@@ -98,6 +98,25 @@ pub fn descubrir(h: &Path) -> Vec<PathBuf> {
     for c in CONTENEDORES {
         mirar(h.join(c));
     }
+    // sin ningún vault reconocible, las carpetas de los contenedores tal cual:
+    // un vault que no se ha abierto en Obsidian no tiene .obsidian/ todavía
+    if out.is_empty() {
+        for c in CONTENEDORES {
+            let Ok(it) = std::fs::read_dir(h.join(c)) else {
+                continue;
+            };
+            for e in it.flatten() {
+                let p = e.path();
+                let oculta = p
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with('.'));
+                if p.is_dir() && !oculta && !out.contains(&p) {
+                    out.push(p);
+                }
+            }
+        }
+    }
     out.sort();
     out
 }
@@ -455,6 +474,21 @@ mod tests {
         assert!(explicar_no_encontrado(&h).contains("1. "));
         std::fs::remove_dir_all(&b).unwrap();
         assert_eq!(buscar(&h), Some(a));
+        let _ = std::fs::remove_dir_all(&h);
+    }
+
+    #[test]
+    fn sin_punto_obsidian_lista_las_carpetas_del_contenedor() {
+        let h = std::env::temp_dir().join(format!("goose-cuentas-cont-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&h);
+        std::fs::create_dir_all(h.join("vaults/goosecode")).unwrap();
+        std::fs::create_dir_all(h.join("vaults/happycode")).unwrap();
+        std::fs::create_dir_all(h.join("vaults/.trash")).unwrap();
+        assert_eq!(
+            descubrir(&h),
+            vec![h.join("vaults/goosecode"), h.join("vaults/happycode")]
+        );
+        assert_eq!(buscar(&h), None); // dos, ninguna dice «personal»: se pregunta
         let _ = std::fs::remove_dir_all(&h);
     }
 
