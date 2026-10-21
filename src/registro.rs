@@ -42,6 +42,35 @@ pub struct Registro {
     repos: Vec<PathBuf>,
 }
 
+/// Las carpetas de proyectos donde se busca un repo que no está donde dice el
+/// registro (bajo la carpeta de inicio).
+pub const CARPETAS: [&str; 8] = [
+    "code",
+    "projects",
+    "Projects",
+    "Code",
+    "src",
+    "dev",
+    "repos",
+    "proyectos",
+];
+
+/// `r` si existe; si no, el primer `~/<carpeta>/<nombre de r>` que exista; si
+/// ninguno, `r` tal cual (y el error dirá esa ruta).
+pub fn buscar_repo(r: PathBuf, inicio: Option<&Path>) -> PathBuf {
+    if r.is_dir() {
+        return r;
+    }
+    let (Some(h), Some(nombre)) = (inicio, r.file_name()) else {
+        return r;
+    };
+    CARPETAS
+        .iter()
+        .map(|c| h.join(c).join(nombre))
+        .find(|p| p.is_dir())
+        .unwrap_or(r)
+}
+
 impl Registro {
     /// El texto del registro; `base` es la carpeta del archivo e `inicio`, la
     /// de `~/`.
@@ -73,6 +102,7 @@ impl Registro {
             .map(|c| {
                 expandir(&c.repo, inicio)
                     .map(|r| if r.is_absolute() { r } else { base.join(r) })
+                    .map(|r| buscar_repo(r, inicio))
                     .map_err(|e| format!("«{}»: {e}", c.slug))
             })
             .collect::<Result<_, _>>()?;
@@ -145,6 +175,26 @@ mod tests {
         assert!(Registro::parse(extra, base, None)
             .unwrap_err()
             .contains("clave"));
+    }
+
+    #[test]
+    fn el_repo_se_busca_en_las_carpetas_de_proyectos() {
+        let h = std::env::temp_dir().join(format!("goose-cuentas-repos-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&h);
+        std::fs::create_dir_all(h.join("projects/rotorf-sico")).unwrap();
+        let r = Registro::parse(
+            "version = 1\n[[cuenta]]\nslug = \"rotor\"\nnombre = \"R\"\nrepo = \"~/code/rotorf-sico\"\n\
+             [[cuenta]]\nslug = \"x\"\nnombre = \"X\"\nrepo = \"~/code/no-existe\"\n",
+            Path::new("/v"),
+            Some(&h),
+        )
+        .unwrap();
+        assert_eq!(
+            r.repo(r.cuenta("rotor").unwrap()),
+            h.join("projects/rotorf-sico")
+        );
+        assert_eq!(r.repo(r.cuenta("x").unwrap()), h.join("code/no-existe"));
+        let _ = std::fs::remove_dir_all(&h);
     }
 
     #[test]
