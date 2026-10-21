@@ -13,6 +13,7 @@
 //! | `GET /api/orden` | las secciones de `publicar/ORDEN.md` con sus paquetes |
 //! | `POST /api/orden/publicado` | `{"carpeta","enlace"?,"fecha"?}` → ORDEN.md y el README del post |
 //! | `GET /archivo?ruta=publicar/…` | un MP4, PNG o TXT del paquete (con `Range`; `&descargar=1` lo baja) |
+//! | `POST /api/revelar` | `{"ruta"}` → muestra el archivo en el Finder (solo de `publicar/`) |
 //!
 //! Dos defensas baratas contra una página ajena que le hable a localhost: el
 //! `Host` tiene que ser `127.0.0.1:<puerto>` o `localhost:<puerto>` (contra el
@@ -137,6 +138,12 @@ struct PublicadoIn {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct RevelarIn {
+    ruta: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct OrdenIn {
     carpeta: String,
     #[serde(default)]
@@ -178,6 +185,10 @@ pub fn responder(vault: &Vault, puerto: u16, hoy: &str, p: &Peticion) -> Respues
             json!({ "raiz": raiz.display().to_string(), "hoy": hoy, "secciones": secciones })
         }),
         ("GET", "/archivo") => return archivo(vault, p),
+        ("POST", "/api/revelar") => match leer::<RevelarIn>(p) {
+            Ok(x) => acciones::revelar(vault, &x.ruta).map(|c| json!({ "ok": c })),
+            Err(r) => return r,
+        },
         ("POST", "/api/orden/publicado") => match leer::<OrdenIn>(p) {
             Ok(x) => {
                 let fecha = vacio(x.fecha).unwrap_or_else(|| hoy.to_string());
@@ -242,7 +253,8 @@ pub fn responder(vault: &Vault, puerto: u16, hoy: &str, p: &Peticion) -> Respues
         (
             _,
             "/" | "/api/estado" | "/api/medicion" | "/api/seguidores" | "/api/pedido"
-            | "/api/publicado" | "/api/orden" | "/api/orden/publicado" | "/archivo",
+            | "/api/publicado" | "/api/orden" | "/api/orden/publicado" | "/archivo"
+            | "/api/revelar",
         ) => {
             return Respuesta::error(405, "método no permitido")
         }

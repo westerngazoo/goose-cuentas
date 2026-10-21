@@ -178,6 +178,15 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
   border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; max-height: 160px; overflow: auto;
 }
 .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+.rutas { margin-top: 10px; display: grid; gap: 6px; }
+.ruta { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; font-size: 12px; }
+.ruta b { color: var(--text-secondary); font-weight: 600; }
+.ruta code {
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-primary);
+  background: var(--surface-0); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: all;
+}
+@media (max-width: 700px) { .ruta { grid-template-columns: 1fr 1fr; } .ruta code { grid-column: 1 / -1; } }
 .btn.chico { padding: 6px 12px; font-size: 13px; }
 a.btn { text-decoration: none; display: inline-block; }
 .avisos { color: var(--error); font-size: 12px; margin-top: 6px; }
@@ -594,6 +603,10 @@ async function copiar(texto, boton) {
   setTimeout(() => boton.textContent = antes, 1400);
 }
 const url = ruta => "/archivo?ruta=" + encodeURIComponent(ruta);
+const ruta = (nombre, rel, abs) =>
+  `<div class="ruta"><b>${nombre}</b><code title="${esc(abs)}">${esc(abs)}</code>` +
+  `<button class="btn sec chico" data-copiar-ruta="${esc(abs)}">Copiar ruta</button>` +
+  `<button class="btn sec chico" data-revelar="${esc(rel)}">Mostrar en Finder</button></div>`;
 function pintarOrden() {
   const todos = $("#o-todos").checked;
   const secs = O.secciones;
@@ -625,6 +638,10 @@ function pintarOrden() {
           <div>${estado}</div>
           ${bloque("Caption", p.caption, capInfo)}
           ${bloque("Alt text", p.alt, "Configuración avanzada → Accesibilidad")}
+          <div class="rutas">
+            ${p.video_abs ? ruta("Video", p.video, p.video_abs) : ""}
+            ${p.portada_abs ? ruta("Portada", p.portada, p.portada_abs) : ""}
+          </div>
           <div class="btns">
             ${p.video ? `<a class="btn sec chico" href="${url(p.video)}&descargar=1">Bajar video</a>` : ""}
             ${p.portada ? `<a class="btn sec chico" href="${url(p.portada)}&descargar=1">Bajar portada</a>` : ""}
@@ -645,6 +662,16 @@ function pintarOrden() {
     const p = O.secciones.flatMap(s => s.paquetes).find(x => x.carpeta === card.dataset.carpeta);
     card.querySelectorAll("[data-copiar]").forEach(b => b.addEventListener("click", () =>
       copiar(b.dataset.copiar === "Caption" ? p.caption : p.alt, b)));
+    card.querySelectorAll("[data-copiar-ruta]").forEach(b => b.addEventListener("click", () => copiar(b.dataset.copiarRuta, b)));
+    card.querySelectorAll("[data-revelar]").forEach(b => b.addEventListener("click", async () => {
+      const antes = b.textContent; b.textContent = "…";
+      try {
+        const r = await fetch("/api/revelar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ruta: b.dataset.revelar }) });
+        const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText);
+        b.textContent = "Abierto";
+      } catch (e) { b.textContent = "No se pudo: " + e.message; }
+      setTimeout(() => b.textContent = antes, 2500);
+    }));
     const f = card.querySelector("form.subir");
     if (f) f.addEventListener("submit", async ev => {
       ev.preventDefault();

@@ -183,6 +183,10 @@ pub struct Paquete {
     /// Rutas relativas a la raíz del repo (para `/archivo?ruta=`).
     pub video: Option<String>,
     pub portada: Option<String>,
+    /// Las mismas, absolutas en esta máquina (para copiarlas y subir el
+    /// archivo desde el navegador o el Finder).
+    pub video_abs: Option<String>,
+    pub portada_abs: Option<String>,
     /// El de `caption.txt` (lo que se pega); si no hay, el de ORDEN.md.
     pub caption: Option<String>,
     pub alt: Option<String>,
@@ -235,6 +239,13 @@ pub fn orden(vault: &Vault) -> Result<(PathBuf, Vec<SeccionVista>), String> {
                         .find(|n| n.ends_with(".mp4") && !n.starts_with('.'))
                         .map(rel);
                     let portada = nombres.iter().find(|n| n.ends_with("portada.png")).map(rel);
+                    let abs = |r: &Option<String>| {
+                        r.as_ref().map(|r| {
+                            let p = raiz.join(r);
+                            std::fs::canonicalize(&p).unwrap_or(p).display().to_string()
+                        })
+                    };
+                    let (video_abs, portada_abs) = (abs(&video), abs(&portada));
                     let caption = leer_txt(&dir.join("caption.txt")).or(e.caption);
                     let alt = leer_txt(&dir.join("alt-text.txt")).or(e.alt);
                     let mut falta = Vec::new();
@@ -269,6 +280,8 @@ pub fn orden(vault: &Vault) -> Result<(PathBuf, Vec<SeccionVista>), String> {
                         enlace: e.enlace,
                         video,
                         portada,
+                        video_abs,
+                        portada_abs,
                         caption,
                         alt,
                         caracteres,
@@ -280,6 +293,41 @@ pub fn orden(vault: &Vault) -> Result<(PathBuf, Vec<SeccionVista>), String> {
         })
         .collect();
     Ok((raiz, secciones))
+}
+
+/// El archivo de `ruta` (relativa al repo de ORDEN.md), si existe y está
+/// dentro de `publicar/`; si no, por qué no.
+pub fn archivo_de_publicar(vault: &Vault, ruta: &str) -> Result<PathBuf, String> {
+    let reg = Registro::leer(&vault.registro())?;
+    let (raiz, _) = orden_md(&reg)?;
+    let base = std::fs::canonicalize(raiz.join("publicar")).map_err(|_| "no existe publicar/")?;
+    let f = std::fs::canonicalize(raiz.join(ruta)).map_err(|_| "no existe".to_string())?;
+    if !f.starts_with(&base) || !f.is_file() {
+        return Err("fuera de publicar/".into());
+    }
+    Ok(f)
+}
+
+/// Muestra el archivo en el explorador del sistema (Finder en macOS). Solo
+/// archivos de `publicar/`. Devuelve el comando que corrió.
+pub fn revelar(vault: &Vault, ruta: &str) -> Result<String, String> {
+    let f = archivo_de_publicar(vault, ruta)?;
+    let (cmd, args): (&str, Vec<std::ffi::OsString>) = if cfg!(target_os = "macos") {
+        ("open", vec!["-R".into(), f.clone().into_os_string()])
+    } else if cfg!(target_os = "windows") {
+        ("explorer", vec![format!("/select,{}", f.display()).into()])
+    } else {
+        let dir = f
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| f.clone());
+        ("xdg-open", vec![dir.into_os_string()])
+    };
+    std::process::Command::new(cmd)
+        .args(&args)
+        .spawn()
+        .map_err(|e| format!("{cmd}: {e}"))?;
+    Ok(format!("{cmd} {}", f.display()))
 }
 
 /// Marca publicada la entrada de `carpeta` en ORDEN.md y, si se encuentra el
