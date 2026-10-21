@@ -234,7 +234,7 @@ dependencies = [
 [[package]]
 name = "guion-core"
 version = "0.1.0"
-source = "git+https://github.com/westerngazoo/guion-video-creator?branch=main#d03970d3c254dcabd663ee6fb9b9b34001ee0f1d"
+source = "git+https://github.com/westerngazoo/guion-video-creator?branch=main#571d9a5679b6f562b91dae3975bc9b06e78b46f2"
 dependencies = [
  "serde",
  "toml",
@@ -243,7 +243,7 @@ dependencies = [
 [[package]]
 name = "guion-encode"
 version = "0.1.0"
-source = "git+https://github.com/westerngazoo/guion-video-creator?branch=main#d03970d3c254dcabd663ee6fb9b9b34001ee0f1d"
+source = "git+https://github.com/westerngazoo/guion-video-creator?branch=main#571d9a5679b6f562b91dae3975bc9b06e78b46f2"
 dependencies = [
  "guion-core",
 ]
@@ -251,7 +251,7 @@ dependencies = [
 [[package]]
 name = "guion-tablero"
 version = "0.1.0"
-source = "git+https://github.com/westerngazoo/guion-video-creator?branch=main#d03970d3c254dcabd663ee6fb9b9b34001ee0f1d"
+source = "git+https://github.com/westerngazoo/guion-video-creator?branch=main#571d9a5679b6f562b91dae3975bc9b06e78b46f2"
 dependencies = [
  "guion-encode",
  "ratatui",
