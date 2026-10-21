@@ -42,6 +42,33 @@ pub struct Registro {
     repos: Vec<PathBuf>,
 }
 
+/// El texto del registro con la línea `repo = "<viejo>"` del bloque de `slug`
+/// cambiada a `nuevo`; lo demás queda igual, comentarios incluidos.
+pub fn reescribir_repo(texto: &str, slug: &str, viejo: &str, nuevo: &str) -> String {
+    let mut en_bloque = false;
+    let mut out = String::with_capacity(texto.len());
+    for l in texto.split_inclusive('\n') {
+        let t = l.trim();
+        if t.starts_with("[[cuenta]]") {
+            en_bloque = false;
+        } else if t.starts_with("slug") && t.contains(&format!("\"{slug}\"")) {
+            en_bloque = true;
+        }
+        if en_bloque && t.starts_with("repo") && t.contains(&format!("\"{viejo}\"")) {
+            // solo el valor entre comillas: la sangría y el comentario se quedan
+            out.push_str(&l.replacen(
+                &format!("\"{viejo}\""),
+                &toml::Value::String(nuevo.to_string()).to_string(),
+                1,
+            ));
+            en_bloque = false;
+        } else {
+            out.push_str(l);
+        }
+    }
+    out
+}
+
 /// Las carpetas de proyectos donde se busca un repo que no está donde dice el
 /// registro (bajo la carpeta de inicio).
 pub const CARPETAS: [&str; 8] = [
@@ -117,8 +144,62 @@ impl Registro {
         let t = std::fs::read_to_string(ruta)
             .map_err(|e| format!("{}: {e} (¿falta `cuentas iniciar`?)", ruta.display()))?;
         let base = ruta.parent().unwrap_or(Path::new("."));
-        Registro::parse(&t, base, inicio().as_deref())
-            .map_err(|e| format!("{}: {e}", ruta.display()))
+        let inicio = inicio();
+        let mut r = Registro::parse(&t, base, inicio.as_deref())
+            .map_err(|e| format!("{}: {e}", ruta.display()))?;
+        // una cuenta que se mudó de repo (fbf a rotorf-sico/fbf, 2026-10-21):
+        // si su repo ya no existe pero otro del registro la declara, el
+        // registro se corrige solo y se reescribe esa línea
+        let cambios = r.sanar();
+        if !cambios.is_empty() {
+            let mut nuevo = t.clone();
+            for (slug, viejo, nuevo_repo) in &cambios {
+                nuevo = reescribir_repo(&nuevo, slug, viejo, nuevo_repo);
+                eprintln!(
+                    "registro: {slug} ahora vive en {nuevo_repo} (antes {viejo}); corregido en {}",
+                    ruta.display()
+                );
+            }
+            if nuevo != t {
+                Registro::parse(&nuevo, base, inicio.as_deref())
+                    .map_err(|e| format!("{}: al corregir: {e}", ruta.display()))?;
+                std::fs::write(ruta, nuevo).map_err(|e| format!("{}: {e}", ruta.display()))?;
+            }
+        }
+        Ok(r)
+    }
+
+    /// Las cuentas cuyo repo no existe: si otro repo del registro declara una
+    /// cuenta con el mismo nombre en su `guion-cuentas.toml`, se apuntan a
+    /// él. Devuelve (slug, repo viejo tal como estaba, repo nuevo tal como
+    /// está en el registro).
+    pub fn sanar(&mut self) -> Vec<(String, String, String)> {
+        let mut cambios = Vec::new();
+        let declara = |repo: &Path, nombre: &str| -> bool {
+            guion_tablero::cuentas::load(repo)
+                .map(|d| {
+                    d.cuentas
+                        .iter()
+                        .any(|c| guion_tablero::tablero::mismo_nombre(&c.nombre, nombre))
+                })
+                .unwrap_or(false)
+        };
+        for i in 0..self.cuentas.len() {
+            if self.repos[i].join("guion-cuentas.toml").is_file() {
+                continue;
+            }
+            let nombre = self.cuentas[i].nombre.clone();
+            let destino = (0..self.cuentas.len())
+                .filter(|&j| j != i && self.repos[j] != self.repos[i])
+                .find(|&j| declara(&self.repos[j], &nombre));
+            if let Some(j) = destino {
+                let repo_nuevo = self.cuentas[j].repo.clone();
+                let viejo = std::mem::replace(&mut self.cuentas[i].repo, repo_nuevo.clone());
+                self.repos[i] = self.repos[j].clone();
+                cambios.push((self.cuentas[i].slug.clone(), viejo, repo_nuevo));
+            }
+        }
+        cambios
     }
 
     /// La cuenta de `slug`; si no hay, el error dice cuáles hay.
@@ -194,6 +275,53 @@ mod tests {
             h.join("projects/rotorf-sico")
         );
         assert_eq!(r.repo(r.cuenta("x").unwrap()), h.join("code/no-existe"));
+        let _ = std::fs::remove_dir_all(&h);
+    }
+
+    #[test]
+    fn un_repo_mudado_se_corrige_solo() {
+        let h = std::env::temp_dir().join(format!("goose-cuentas-sanar-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&h);
+        let casa = h.join("code/rotorf-sico");
+        std::fs::create_dir_all(&casa).unwrap();
+        std::fs::write(
+            casa.join("guion-cuentas.toml"),
+            "[[cuenta]]\nnombre = \"Rotor Físico\"\nposts = [\"content/posts/*\"]\n\
+             [[cuenta]]\nnombre = \"fisicobuenfisico\"\nposts = [\"fbf/reels/*\"]\n",
+        )
+        .unwrap();
+        let v = h.join("vault/cuentas");
+        std::fs::create_dir_all(&v).unwrap();
+        let texto = "version = 1\n\n[[cuenta]]\nslug = \"rotor\"\nnombre = \"Rotor Físico\"\nrepo = \"~/code/rotorf-sico\"\n\n\
+                     [[cuenta]]\nslug = \"fbf\"\nnombre = \"fisicobuenfisico\"\n  repo = \"~/code/fisicobuenfisico\"   # viejo\n";
+        std::fs::write(v.join("cuentas.toml"), texto).unwrap();
+        let mut r = Registro::parse(texto, &v, Some(&h)).unwrap();
+        let cambios = r.sanar();
+        assert_eq!(
+            cambios,
+            vec![(
+                "fbf".to_string(),
+                "~/code/fisicobuenfisico".to_string(),
+                "~/code/rotorf-sico".to_string()
+            )]
+        );
+        assert_eq!(r.repo(r.cuenta("fbf").unwrap()), casa);
+        let nuevo = reescribir_repo(
+            texto,
+            "fbf",
+            "~/code/fisicobuenfisico",
+            "~/code/rotorf-sico",
+        );
+        assert!(
+            nuevo.contains("  repo = \"~/code/rotorf-sico\"   # viejo\n"),
+            "{nuevo}"
+        );
+        assert!(nuevo.contains(
+            "slug = \"rotor\"\nnombre = \"Rotor Físico\"\nrepo = \"~/code/rotorf-sico\""
+        ));
+        // ya corregido, no cambia nada
+        let mut r2 = Registro::parse(&nuevo, &v, Some(&h)).unwrap();
+        assert!(r2.sanar().is_empty());
         let _ = std::fs::remove_dir_all(&h);
     }
 

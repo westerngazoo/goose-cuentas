@@ -32,10 +32,10 @@ misma línea; si lo haces, `cuentas` los ignora.
 
 Las cuatro cuentas viven en un solo repo, `rotorf-sico` (fbf en `rotorf-sico/fbf/`).
 Se busca donde dice `cuentas/cuentas.toml`; si no está ahí, en `~/code`,
-`~/projects` y carpetas parecidas, con el mismo nombre. Si tu registro es de
-antes del 2026-10-21 y apunta fbf a `fisicobuenfisico`, cambia esa línea a
-`repo = "~/code/rotorf-sico"` (o borra `cuentas/cuentas.toml` y vuelve a correr
-`cuentas iniciar`, que lo crea de nuevo sin tocar las estadísticas).
+`~/projects` y carpetas parecidas, con el mismo nombre. Si una cuenta
+se muda de repo (como fbf el 2026-10-21), el registro se corrige solo la
+siguiente vez que se lee: una cuenta cuyo repo ya no existe se apunta al repo
+del registro que la declare, y se reescribe esa línea en `cuentas.toml`.
 
 `iniciar` crea, dentro del vault, `cuentas/` con su README, el registro
 (`cuentas.toml`) y los dos CSV. Nunca pisa un archivo que ya existe. La ruta
