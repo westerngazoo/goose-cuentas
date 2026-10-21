@@ -27,7 +27,40 @@ use crate::estadisticas::{ENCABEZADO_POSTS, ENCABEZADO_SEGUIDORES};
 /// La variable que nombra el vault.
 pub const ENV: &str = "GOOSE_VAULT";
 /// Dónde se busca el vault si nada lo nombra, relativo a la carpeta de inicio.
-pub const CANDIDATOS: [&str; 3] = ["vault/vault personal", "vault personal", "vault"];
+pub const CANDIDATOS: [&str; 6] = [
+    "vaults/personal",
+    "vaults/vault personal",
+    "Vaults/personal",
+    "vault/vault personal",
+    "vault/personal",
+    "vault personal",
+];
+/// Las carpetas que suelen juntar varios vaults: de ellas se toma la que
+/// tenga «personal» en el nombre.
+pub const CONTENEDORES: [&str; 5] = ["vaults", "Vaults", "vault", "Vault", "Documents/vaults"];
+
+/// El vault personal bajo `h`: un candidato que exista, si no una carpeta con
+/// «personal» en el nombre dentro de un contenedor.
+pub fn buscar(h: &Path) -> Option<PathBuf> {
+    if let Some(p) = CANDIDATOS.iter().map(|c| h.join(c)).find(|p| p.is_dir()) {
+        return Some(p);
+    }
+    CONTENEDORES.iter().find_map(|c| {
+        let mut hijos: Vec<PathBuf> = std::fs::read_dir(h.join(c))
+            .ok()?
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| {
+                p.is_dir()
+                    && p.file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| n.to_lowercase().contains("personal"))
+            })
+            .collect();
+        hijos.sort();
+        hijos.into_iter().next()
+    })
+}
 /// La carpeta de esta herramienta dentro del vault, si el config no dice otra.
 pub const CARPETA: &str = "cuentas";
 
@@ -116,17 +149,15 @@ impl Vault {
         } else {
             let h =
                 inicio.ok_or("no sé cuál es la carpeta de inicio; nombra el vault con --vault")?;
-            CANDIDATOS
-                .iter()
-                .map(|c| h.join(c))
-                .find(|p| p.is_dir())
-                .ok_or_else(|| {
-                    format!(
-                        "no encuentro el vault (busqué ~/{}); nómbralo una vez con \
-                         `cuentas iniciar --vault \"<ruta>\"`",
-                        CANDIDATOS.join(", ~/")
-                    )
-                })?
+            buscar(h).ok_or_else(|| {
+                format!(
+                    "no encuentro el vault (busqué ~/{} y, dentro de ~/{}, una carpeta con \
+                     «personal» en el nombre); nómbralo una vez con \
+                     `cuentas iniciar --vault \"<ruta>\"`",
+                    CANDIDATOS.join(", ~/"),
+                    CONTENEDORES.join(", ~/")
+                )
+            })?
         };
         Ok(Vault { raiz, carpeta })
     }
@@ -293,6 +324,18 @@ mod tests {
         std::fs::create_dir_all(h.join("vault/vault personal")).unwrap();
         let v = Vault::localizar(None, &Config::default(), Some(&h)).unwrap();
         assert_eq!(v.raiz, h.join("vault/vault personal"));
+        let _ = std::fs::remove_dir_all(&h);
+    }
+
+    #[test]
+    fn el_vault_personal_dentro_de_vaults() {
+        let h = std::env::temp_dir().join(format!("goose-cuentas-vaults-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&h);
+        std::fs::create_dir_all(h.join("vaults/trabajo")).unwrap();
+        std::fs::create_dir_all(h.join("vaults/Mi Personal")).unwrap();
+        assert_eq!(buscar(&h), Some(h.join("vaults/Mi Personal")));
+        std::fs::create_dir_all(h.join("vaults/personal")).unwrap();
+        assert_eq!(buscar(&h), Some(h.join("vaults/personal")));
         let _ = std::fs::remove_dir_all(&h);
     }
 
