@@ -12,6 +12,7 @@
 //! | `POST /api/publicado` | `{"cuenta","post","enlace"?,"fecha"?}` → la línea nueva |
 //! | `GET /api/orden` | las secciones de `publicar/ORDEN.md` con sus paquetes |
 //! | `POST /api/orden/publicado` | `{"carpeta","enlace"?,"fecha"?}` → ORDEN.md y el README del post |
+//! | `GET /avatar?cuenta=<slug>` | el avatar que declara el repo de la cuenta (png, jpg, webp o svg, dentro del repo) |
 //! | `GET /archivo?ruta=publicar/…` | un MP4, PNG o TXT del paquete (con `Range`; `&descargar=1` lo baja) |
 //! | `POST /api/revelar` | `{"ruta"}` → muestra el archivo en el Finder (solo de `publicar/`) |
 //!
@@ -214,6 +215,7 @@ pub fn responder(vault: &Vault, puerto: u16, hoy: &str, p: &Peticion) -> Respues
             json!({ "raiz": raiz.display().to_string(), "hoy": hoy, "secciones": secciones })
         }),
         ("GET", "/archivo") => return archivo(vault, p),
+        ("GET", "/avatar") => return avatar(vault, p),
         ("POST", "/api/revelar") => match leer::<RevelarIn>(p) {
             Ok(x) => acciones::revelar(vault, &x.ruta).map(|c| json!({ "ok": c })),
             Err(r) => return r,
@@ -283,7 +285,7 @@ pub fn responder(vault: &Vault, puerto: u16, hoy: &str, p: &Peticion) -> Respues
             _,
             "/" | "/api/estado" | "/api/medicion" | "/api/seguidores" | "/api/pedido"
             | "/api/publicado" | "/api/orden" | "/api/orden/publicado" | "/archivo"
-            | "/api/revelar",
+            | "/avatar" | "/api/revelar",
         ) => {
             return Respuesta::error(405, "método no permitido")
         }
@@ -315,6 +317,34 @@ fn param<'a>(p: &'a Peticion, k: &str) -> Option<&'a str> {
         .iter()
         .find(|(n, _)| n == k)
         .map(|(_, v)| v.as_str())
+}
+
+/// El avatar de una cuenta (`?cuenta=<slug>`), el que declara su repo.
+fn avatar(vault: &Vault, p: &Peticion) -> Respuesta {
+    let Some(slug) = param(p, "cuenta") else {
+        return Respuesta::error(400, "falta ?cuenta=");
+    };
+    match acciones::avatar(vault, slug).and_then(|(ruta, tipo)| {
+        std::fs::read(&ruta)
+            .map(|b| (b, tipo))
+            .map_err(|e| format!("{}: {e}", ruta.display()))
+    }) {
+        Ok((cuerpo, tipo)) => Respuesta {
+            estado: 200,
+            tipo,
+            cuerpo,
+            extra: vec![
+                ("Cache-Control", "max-age=300".to_string()),
+                // un SVG no corre scripts ni carga nada fuera de sí
+                (
+                    "Content-Security-Policy",
+                    "default-src 'none'; style-src 'unsafe-inline'".to_string(),
+                ),
+                ("X-Content-Type-Options", "nosniff".to_string()),
+            ],
+        },
+        Err(e) => Respuesta::error(404, &e),
+    }
 }
 
 /// Un archivo de un paquete de `publicar/`: solo MP4, PNG o TXT, y solo de
@@ -764,6 +794,48 @@ mod tests {
         );
         assert_eq!(p["post_ruta"], "posts/deriva");
         assert_eq!(p["variantes"][1], "inclinado");
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn el_avatar_de_una_cuenta() {
+        let (v, d) = mundo("avatar");
+        let repo = d.join("repo");
+        let hoy = "2026-10-22";
+        let pedir = |q: &str| responder(&v, 7171, hoy, &pet("GET", q, ""));
+        // sin declararlo: 404 con el porqué, y el estado dice que no hay
+        let r = pedir("/avatar?cuenta=rotor");
+        assert_eq!(r.estado, 404);
+        assert!(r.texto().contains("no declara avatar"), "{}", r.texto());
+        std::fs::create_dir_all(repo.join("marca")).unwrap();
+        std::fs::write(repo.join("marca/av.png"), b"\x89PNG").unwrap();
+        std::fs::write(
+            repo.join("guion-cuentas.toml"),
+            "[[cuenta]]\nnombre = \"Rotor\"\nposts = [\"posts/*\"]\navatar = \"marca/av.png\"\ncolor = \"#e0322a\"\n",
+        )
+        .unwrap();
+        let r = pedir("/avatar?cuenta=rotor");
+        assert_eq!((r.estado, r.tipo), (200, "image/png"));
+        assert_eq!(r.cuerpo, b"\x89PNG");
+        assert!(r.extra.iter().any(|(k, _)| *k == "Content-Security-Policy"));
+        let e: Value = serde_json::from_slice(&pedir("/api/estado").cuerpo).unwrap();
+        assert_eq!(
+            (&e["cuentas"][0]["avatar"], &e["cuentas"][0]["color"]),
+            (&json!(true), &json!("#e0322a"))
+        );
+        // una cuenta que no existe, o sin ?cuenta=
+        assert_eq!(pedir("/avatar?cuenta=nadie").estado, 404);
+        assert_eq!(pedir("/avatar").estado, 400);
+        // un enlace que sale del repo no se sirve
+        #[cfg(unix)]
+        {
+            std::fs::write(d.join("secreto.png"), b"no").unwrap();
+            std::fs::remove_file(repo.join("marca/av.png")).unwrap();
+            std::os::unix::fs::symlink(d.join("secreto.png"), repo.join("marca/av.png")).unwrap();
+            let r = pedir("/avatar?cuenta=rotor");
+            assert_eq!(r.estado, 404, "{}", r.texto());
+            assert!(r.texto().contains("sale de su repo"));
+        }
         let _ = std::fs::remove_dir_all(d);
     }
 

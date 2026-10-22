@@ -32,7 +32,7 @@ lee `README.md`, `docs/plan.md` y `docs/decisions.md`.
 - `src/publicado.rs`: la línea `estado:` del README, con lo anterior detrás.
 - `src/orden.rs`: lee `publicar/ORDEN.md` (secciones, entradas, caption, alt, estado) y reescribe solo la línea «Publicado» de una entrada.
 - `src/acciones.rs`: lo que hacen la línea de comandos y la interfaz, lo mismo para las dos.
-- `src/ui.rs` y `src/ui.html`: `cuentas ui`. Solo std, atado a 127.0.0.1, con el `Host` comprobado y los POST en JSON. Sin CDN. `/archivo` solo sirve MP4, PNG y TXT de dentro de `publicar/`, con `Range` para el video; `/api/revelar` abre el Finder solo sobre esos archivos.
+- `src/ui.rs` y `src/ui.html`: `cuentas ui`. Solo std, atado a 127.0.0.1, con el `Host` comprobado y los POST en JSON. Sin CDN. `/archivo` solo sirve MP4, PNG y TXT de dentro de `publicar/`, con `Range` para el video; `/api/revelar` abre el Finder solo sobre esos archivos. `/avatar?cuenta=` sirve el avatar que declara el repo de la cuenta, solo si es una imagen dentro de ese repo.
 - `src/main.rs`: la línea de comandos.
 
 Antes de un commit: `cargo fmt --check`,

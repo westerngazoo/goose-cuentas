@@ -20,6 +20,7 @@
   --ok: #1f7a3d;
   --error: #b42318;
   --focus: #2a78d6;
+  --contorno: #0a0a0b;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -36,6 +37,7 @@
     --ok: #4fbf72;
     --error: #f0776c;
     --focus: #3987e5;
+    --contorno: transparent;
   }
 }
 :root[data-theme="dark"] {
@@ -52,6 +54,7 @@
   --ok: #4fbf72;
   --error: #f0776c;
   --focus: #3987e5;
+  --contorno: transparent;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -61,21 +64,40 @@ body {
   color: var(--text-primary);
   font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
+.cabeza { position: sticky; top: 0; z-index: 5; background: var(--surface-0); border-bottom: 1px solid var(--line); }
 header {
-  display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
-  padding: 18px 24px 0; max-width: 1200px; margin: 0 auto;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 14px 24px 0; max-width: 1200px; margin: 0 auto;
 }
 header h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
-header .vault { color: var(--text-muted); font-size: 13px; overflow-wrap: anywhere; }
+.casa { display: flex; align-items: center; }
+.casa { gap: 8px; }
+.hoy { color: var(--text-secondary); font-size: 13px; margin-left: auto; }
+.hoy b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
 nav {
-  display: flex; gap: 4px; padding: 12px 24px 0; max-width: 1200px; margin: 0 auto;
-  border-bottom: 1px solid var(--line); overflow-x: auto;
+  display: flex; gap: 2px; padding: 8px 24px 0; max-width: 1200px; margin: 0 auto;
+  overflow-x: auto; scrollbar-width: none;
 }
+nav::-webkit-scrollbar { display: none; }
 nav button {
   font: inherit; background: none; border: 0; color: var(--text-secondary);
   padding: 8px 12px 10px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px;
 }
 nav button[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--series-1); font-weight: 600; }
+.cuenta-n { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+  background: var(--grid); color: var(--text-secondary); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+nav button[aria-selected="true"] .cuenta-n { background: var(--series-1); color: #fff; }
+/* el avatar de una cuenta, con el anillo de su color */
+.av { --c: var(--line); --t: 28px; flex: none; display: inline-grid; place-items: center; width: var(--t); height: var(--t);
+  border-radius: 50%; box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 4px var(--c); background: var(--surface-0);
+  overflow: hidden; font-size: calc(var(--t) * .38); font-weight: 700; color: var(--text-secondary); vertical-align: middle; }
+.av.claro { box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 4px var(--c), 0 0 0 5px var(--contorno); }
+.av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.quien { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.quien > div { min-width: 0; }
+.quien h3, .quien b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+footer { max-width: 1200px; margin: 0 auto; padding: 0 24px 40px; color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
 main { max-width: 1200px; margin: 0 auto; padding: 20px 24px 64px; }
 section[hidden] { display: none; }
 h2 { font-size: 16px; margin: 28px 0 10px; }
@@ -114,6 +136,7 @@ h2:first-child { margin-top: 0; }
 .tip b { font-variant-numeric: tabular-nums; }
 form { display: grid; gap: 12px; }
 .campos { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.campos > label.con-picker { grid-column: 1 / -1; }
 label { display: grid; gap: 4px; font-size: 12px; color: var(--text-secondary); }
 input, select, textarea {
   font: inherit; color: var(--text-primary); background: var(--surface-0);
@@ -146,8 +169,8 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
   display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px;
   border: 1px solid var(--line); color: var(--text-secondary); white-space: nowrap;
 }
-.chip.publicado { border-color: var(--series-1); color: var(--series-1); }
-.chip.listo { border-color: var(--text-secondary); color: var(--text-primary); }
+.chip.publicado { border-color: var(--line); color: var(--text-muted); }
+.chip.listo { border-color: var(--series-1-soft); background: var(--series-1-soft); color: var(--text-primary); }
 .chip.en-curso { border-style: dashed; color: var(--text-primary); }
 .chip.descartado { color: var(--text-muted); text-decoration: line-through; }
 fieldset.variantes { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px 10px; margin: 10px 0; display: grid; gap: 8px; }
@@ -170,11 +193,43 @@ fieldset.variantes .btn { justify-self: start; }
   font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--surface-1);
   color: var(--text-secondary); border-radius: 999px; padding: 5px 12px; cursor: pointer;
 }
-.chips button[aria-pressed="true"] { border-color: var(--series-1); color: var(--text-primary); font-weight: 600; }
+.chips button[aria-pressed="true"] { border-color: var(--series-1); color: var(--text-primary); font-weight: 600; box-shadow: inset 0 0 0 1px var(--series-1); }
+.chips button { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.chips button .av { --t: 22px; }
+.chips.fila { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 4px 2px; margin: -4px -2px; }
+.chips.fila::-webkit-scrollbar { display: none; }
+.picker { margin-top: 2px; flex-wrap: wrap; overflow: visible; }
+.picker + select, .picker-sel { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+label.con-picker { position: relative; }
+.seccion-o > h2 .av { --t: 34px; }
+.paquete { border-left: 4px solid var(--c, var(--line)); }
+.paquete.siguiente { border-left-color: var(--c, var(--series-1)); }
+.paquete-fila { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 8px 12px; margin-bottom: 8px; border-left: 4px solid var(--c, var(--line)); }
+.paquete-fila .t { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.paquete-fila.hecho { opacity: .72; }
+.titulo-p { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+h2.bloque { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-secondary); margin: 6px 0 12px; }
+.texto .meta { font-size: 12px; color: var(--text-muted); margin: -2px 0 4px; }
+.btn { white-space: nowrap; }
+form.subir { margin-top: 12px; }
+form.subir input { max-width: 300px; }
+.tarjeta-cuenta { border-top: 4px solid var(--c, var(--line)); display: flex; flex-direction: column; }
+.tarjeta-cuenta.claro { box-shadow: inset 0 1px 0 0 var(--contorno); }
+.tarjeta-cuenta .stats { margin-top: auto; padding-top: 10px; }
+.card.vacio { padding: 14px 16px; grid-column: 1 / -1; }
+.tarjeta-cuenta .av { --t: 44px; }
+.tarjeta-cuenta .quien h3 { white-space: normal; }
+.sinmedir { margin-top: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--text-secondary); font-size: 13px; }
+.pedido { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 0 10px; }
+.pedido > .av { margin-top: 4px; }
+.pedido .linea { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.pedido .linea .idea { margin: 0; }
+.pedido .av { --t: 20px; }
+td .av { --t: 18px; margin-right: 6px; }
 .check { display: flex; flex-direction: row; align-items: center; gap: 6px; font-size: 13px; }
 .check input { width: auto; }
 .seccion-o { margin-bottom: 28px; }
-.seccion-o > h2 { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.seccion-o > h2 { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .seccion-o details { font-size: 13px; color: var(--text-secondary); margin: 0 0 10px; }
 .seccion-o details pre { white-space: pre-wrap; font: inherit; margin: 6px 0 0; }
 .paquete { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; margin-bottom: 12px; }
@@ -193,7 +248,7 @@ fieldset.variantes .btn { justify-self: start; }
 }
 .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
 .rutas { margin-top: 10px; display: grid; gap: 6px; }
-.ruta { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; font-size: 12px; }
+.ruta { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; font-size: 12px; }
 .ruta b { color: var(--text-secondary); font-weight: 600; }
 .ruta code {
   font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-primary);
@@ -209,29 +264,55 @@ a.btn { text-decoration: none; display: inline-block; }
   .paquete video, .paquete .sinvideo { width: min(260px, 100%); }
 }
 @media (max-width: 560px) {
-  header, nav, main { padding-left: 16px; padding-right: 16px; }
+  header, nav, main, footer { padding-left: 16px; padding-right: 16px; }
   .stats { grid-template-columns: repeat(2, 1fr); }
+  nav { gap: 0; padding-left: 10px; padding-right: 10px; }
+  nav button { padding: 8px 6px 10px; font-size: 13.5px; gap: 4px; }
+  .cuenta-n { min-width: 18px; height: 18px; padding: 0 5px; font-size: 10.5px; }
+  .paquete-fila .t { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3; }
+  .paquete-fila:not(.hecho) .chip { display: none; }
+  #t-posts thead { display: none; }
+  #t-posts tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; border-bottom: 1px solid var(--grid); }
+  #t-posts td { border: 0; }
+  #t-posts td.accion { grid-column: 1 / -1; padding-top: 0; }
+  #t-posts td.accion:empty { display: none; }
+  #t-posts form.acciones { min-width: 0; }
+  #t-posts form.acciones input { max-width: none !important; }
+  .hoy, .casa { display: none; }
+  header { padding-top: 10px; }
+  .largo { display: none; }
+  .chips.fila { flex-wrap: wrap; overflow: visible; }
+  .stats { grid-template-columns: repeat(3, 1fr); }
+  .paquete video, .paquete .sinvideo { width: 160px; }
+  .texto .fila { flex-wrap: wrap; }
+  .posts-n { display: none; }
+  .posts-linea { display: block !important; }
 }
+.corto { display: none; }
+@media (max-width: 560px) { .corto { display: inline; } }
+.posts-linea { display: none; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 </style>
 </head>
 <body>
+<div class="cabeza">
 <header>
+  <div class="casa" id="casa" aria-hidden="true"></div>
   <h1>Cuentas de la casa</h1>
-  <span class="vault" id="vault"></span>
+  <span class="hoy" id="hoy"></span>
 </header>
 <nav role="tablist">
-  <button role="tab" data-tab="publicar" aria-selected="true">Publicar</button>
+  <button role="tab" data-tab="publicar" aria-selected="true">Publicar <span class="cuenta-n" id="n-publicar" hidden></span></button>
   <button role="tab" data-tab="tablero" aria-selected="false">Tablero</button>
   <button role="tab" data-tab="capturar" aria-selected="false">Capturar</button>
-  <button role="tab" data-tab="pedir" aria-selected="false">Pedir reel</button>
+  <button role="tab" data-tab="pedir" aria-selected="false"><span class="largo">Pedir reel</span><span class="corto">Pedir</span> <span class="cuenta-n" id="n-pedir" hidden></span></button>
   <button role="tab" data-tab="posts" aria-selected="false">Posts</button>
 </nav>
+</div>
 <main>
   <section id="publicar">
     <div class="acciones filtros">
-      <div class="chips" id="o-cuentas" role="group" aria-label="Cuenta"></div>
+      <div class="chips fila" id="o-cuentas" role="group" aria-label="Cuenta"></div>
       <label class="check"><input type="checkbox" id="o-todos"> mostrar los ya publicados</label>
-      <span class="handle" id="o-resumen"></span>
     </div>
     <div id="o-secciones"></div>
   </section>
@@ -347,7 +428,7 @@ a.btn { text-decoration: none; display: inline-block; }
 
   <section id="posts" hidden>
     <div class="acciones">
-      <label style="max-width:260px">Cuenta <select id="x-cuenta"></select></label>
+      <label style="flex: 1 1 100%; min-width: 0">Cuenta <select id="x-cuenta"></select></label>
       <label style="max-width:200px">Estado
         <select id="x-estado">
           <option value="">todos</option>
@@ -359,6 +440,7 @@ a.btn { text-decoration: none; display: inline-block; }
     <p class="nota">«Ya lo subí» escribe en el README del post en su repo: publicado, la fecha y el enlace. El commit lo haces tú o el agente.</p>
   </section>
 </main>
+<footer id="vault"></footer>
 <div class="tip" id="tip"></div>
 
 <script>
@@ -369,6 +451,52 @@ const miles = n => n == null ? "—" : String(n).replace(/\B(?=(\d{3})+(?!\d))/g
 const pct = x => x == null ? "—" : (x * 100).toFixed(1) + NBSP + "%";
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 let E = null;
+
+// ---------- las cuentas: su avatar, su color, su nombre corto
+const cta = slug => (E && E.cuentas.find(c => c.slug === slug)) || null;
+// un acento claro (luminancia relativa > 0.4) necesita contorno sobre el fondo claro
+function esClaro(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex || "")) return false;
+  const l = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2] > 0.4;
+}
+const corto = c => c ? (c.instagram ? "@" + c.instagram : c.nombre) : "";
+function av(slug, t) {
+  const c = cta(slug);
+  const st = (c && c.color ? `--c:${esc(c.color)};` : "") + (t ? `--t:${t}px;` : "");
+  const ini = ((c && c.nombre) || slug || "?").split(/\s+/).filter(w => /^\p{L}/u.test(w)).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+  return `<span class="av${c && esClaro(c.color) ? " claro" : ""}" style="${st}">${c && c.avatar ? `<img src="/avatar?cuenta=${encodeURIComponent(slug)}" alt="" loading="lazy" decoding="async">` : esc(ini)}</span>`;
+}
+// un <select> de cuentas se elige con chips (el select sigue en el formulario, escondido)
+function picker(sel) {
+  let box = sel.previousElementSibling;
+  if (!box || !box.classList.contains("picker")) {
+    box = document.createElement("div");
+    box.className = "chips fila picker"; box.setAttribute("role", "radiogroup");
+    box.setAttribute("aria-label", "Cuenta");
+    sel.before(box); sel.classList.add("picker-sel"); sel.tabIndex = -1; sel.setAttribute("aria-hidden", "true");
+    const l = sel.closest("label"); if (l) l.classList.add("con-picker");
+  }
+  box.innerHTML = [...sel.options].map(o => {
+    const si = o.value === sel.value;
+    return `<button type="button" role="radio" data-v="${esc(o.value)}" aria-checked="${si}" aria-pressed="${si}">${av(o.value)}<span>${esc(o.textContent)}</span></button>`;
+  }).join("");
+  box.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    if (sel.value === b.dataset.v) return;
+    sel.value = b.dataset.v; picker(sel); sel.dispatchEvent(new Event("change"));
+  }));
+}
+function pintarCasa() {
+  $("#casa").innerHTML = E.cuentas.map(c => av(c.slug, 30)).join("");
+  pintarConteos();
+}
+function pintarConteos() {
+  const abiertos = E ? E.cuentas.reduce((n, c) => n + c.pedidos.filter(p => p.vivo === "pendiente" || p.vivo === "en curso").length, 0) : 0;
+  const subir = O ? O.secciones.reduce((n, s) => n + s.paquetes.filter(p => !p.publicado).length, 0) : null;
+  const pon = (id, n) => { const e = $(id); e.hidden = !n; e.textContent = n || ""; };
+  pon("#n-publicar", subir); pon("#n-pedir", abiertos);
+  $("#hoy").innerHTML = [subir != null ? `<b>${subir}</b> por subir` : "", `<b>${abiertos}</b> pedidos abiertos`].filter(Boolean).join(" · ");
+}
 
 // ---------- pestañas
 const tabs = [...document.querySelectorAll("nav button")];
@@ -398,8 +526,8 @@ async function cargar() {
   const j = await r.json();
   if (!r.ok) { $("#tarjetas").innerHTML = `<div class="card aviso">${esc(j.error)}</div>`; return; }
   E = j;
-  $("#vault").textContent = "vault: " + j.vault;
-  pintarTablero(); pintarSelects(); pintarMediciones(); pintarPedidos(); pintarPosts();
+  $("#vault").textContent = "Vault: " + j.vault;
+  pintarCasa(); pintarTablero(); if (O) pintarOrden(); pintarSelects(); pintarMediciones(); pintarPedidos(); pintarPosts();
   for (const id of ["#m-fecha", "#s-fecha"]) if (!$(id).value) $(id).value = j.hoy;
 }
 
@@ -421,15 +549,20 @@ async function enviar(ruta, cuerpo, msg) {
 // ---------- tablero
 function pintarTablero() {
   const cs = E.resumen.cuentas;
+  const nadieSeg = !cs.some(c => c.seguidores != null);
   $("#tarjetas").innerHTML = cs.map(c => {
     const cambio = c.seguidores_cambio == null ? "" :
       `<small>${c.seguidores_cambio >= 0 ? "+" : "−"}${miles(Math.abs(c.seguidores_cambio))} desde el ${esc(c.seguidores_desde)}</small>`;
     const estados = c.estados.map(([e, n]) => `${esc(e)} ${n}`).join(" · ");
     const repo = E.cuentas.find(x => x.slug === c.slug);
-    return `<div class="card">
-      <h3>${esc(c.nombre)}</h3>
-      <div class="handle">${c.instagram ? "@" + esc(c.instagram) : "usuario por reservar"}</div>
-      <div class="hero">${miles(c.seguidores)}${c.seguidores == null ? "<small>seguidores: sin medición</small>" : "<small>seguidores</small>"}</div>
+    const color = repo && repo.color ? `style="--c:${esc(repo.color)}"` : "";
+    const seg = c.seguidores == null
+      ? (nadieSeg ? "" : `<div class="sinmedir">Sin seguidores capturados. <button type="button" class="btn sec chico" data-capturar="${esc(c.slug)}">Capturar</button></div>`)
+      : `<div class="hero">${miles(c.seguidores)}<small>seguidores</small></div>`;
+    return `<div class="card tarjeta-cuenta${repo && esClaro(repo.color) ? " claro" : ""}" ${color}>
+      <div class="quien">${av(c.slug, 44)}<div><h3>${esc(c.nombre)}</h3>
+      <div class="handle">${c.instagram ? "@" + esc(c.instagram) : "usuario por reservar"}</div></div></div>
+      ${seg}
       ${cambio ? `<div class="handle">${cambio}</div>` : ""}
       <div class="stats">
         <div>Vistas<b>${c.posts.length ? miles(c.vistas) : "—"}</b></div>
@@ -442,13 +575,24 @@ function pintarTablero() {
     </div>`;
   }).join("");
 
-  $("#seguidores-graficas").innerHTML = cs.map(c =>
-    `<div class="card"><h3>${esc(c.nombre)}</h3><div data-seg="${esc(c.slug)}"></div></div>`).join("");
-  cs.forEach(c => lineas($(`[data-seg="${c.slug}"]`), E.seguidores.filter(s => s.cuenta === c.slug)));
-
-  $("#vistas-graficas").innerHTML = cs.map(c =>
-    `<div class="card"><h3>${esc(c.nombre)}</h3><div data-vis="${esc(c.slug)}"></div></div>`).join("");
-  cs.forEach(c => barras($(`[data-vis="${c.slug}"]`), c.posts));
+  const irCapturar = slug => {
+    const sel = $("#s-cuenta"); if (slug) { sel.value = slug; picker(sel); }
+    abrir("capturar"); $("#f-seguidores").elements.seguidores.focus();
+  };
+  $("#tarjetas").querySelectorAll("[data-capturar]").forEach(b => b.addEventListener("click", () => irCapturar(b.dataset.capturar)));
+  // una gráfica por cuenta solo cuando alguna tiene datos; si no, un solo aviso
+  const titulo = c => `<div class="quien">${av(c.slug, 24)}<h3>${esc(c.nombre)}</h3></div>`;
+  const conSeg = cs.filter(c => E.seguidores.some(s => s.cuenta === c.slug));
+  $("#seguidores-graficas").innerHTML = conSeg.length
+    ? conSeg.map(c => `<div class="card">${titulo(c)}<div data-seg="${esc(c.slug)}"></div></div>`).join("")
+    : `<div class="card vacio sinmedir">Todavía no hay seguidores capturados de ninguna cuenta. Cópialos de Instagram: con dos fechas aparece la línea. <button type="button" class="btn sec chico" id="seg-capturar">Capturar seguidores</button></div>`;
+  const bc = $("#seg-capturar"); if (bc) bc.addEventListener("click", () => irCapturar(null));
+  conSeg.forEach(c => lineas($(`[data-seg="${c.slug}"]`), E.seguidores.filter(s => s.cuenta === c.slug)));
+  const conVis = cs.filter(c => c.posts.some(p => p.ultima && p.ultima.vistas != null));
+  $("#vistas-graficas").innerHTML = conVis.length
+    ? conVis.map(c => `<div class="card">${titulo(c)}<div data-vis="${esc(c.slug)}"></div></div>`).join("")
+    : `<div class="card vacio">Ningún post con vistas todavía. Las copias de Insights en «Capturar».</div>`;
+  conVis.forEach(c => barras($(`[data-vis="${c.slug}"]`), c.posts));
 }
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -535,7 +679,7 @@ function opcionesCuentas(sel) {
   if (v) sel.value = v;
 }
 function pintarSelects() {
-  ["#m-cuenta", "#s-cuenta", "#p-cuenta", "#x-cuenta"].forEach(id => opcionesCuentas($(id)));
+  ["#m-cuenta", "#s-cuenta", "#p-cuenta", "#x-cuenta"].forEach(id => { opcionesCuentas($(id)); picker($(id)); });
   opcionesPosts();
 }
 function opcionesPosts() {
@@ -645,7 +789,7 @@ function pintarMediciones() {
   const ms = E.mediciones.slice(-25).reverse();
   const nombre = s => (E.cuentas.find(c => c.slug === s) || { nombre: s }).nombre;
   $("#t-mediciones").innerHTML = ms.length ? `<thead><tr><th>Fecha</th><th>Cuenta</th><th>Post</th><th class="n">Vistas</th><th class="n">Likes</th><th class="n">Coment.</th><th class="n">Guard.</th><th class="n">Compart.</th><th>Nota</th></tr></thead><tbody>` +
-    ms.map(m => `<tr><td>${esc(m.fecha)}</td><td>${esc(nombre(m.cuenta))}</td><td>${esc(m.post)}</td><td class="n">${miles(m.vistas)}</td><td class="n">${miles(m.likes)}</td><td class="n">${miles(m.comentarios)}</td><td class="n">${miles(m.guardados)}</td><td class="n">${miles(m.compartidos)}</td><td>${esc(m.nota)}</td></tr>`).join("") + "</tbody>"
+    ms.map(m => `<tr><td>${esc(m.fecha)}</td><td>${av(m.cuenta, 18)}${esc(nombre(m.cuenta))}</td><td>${esc(m.post)}</td><td class="n">${miles(m.vistas)}</td><td class="n">${miles(m.likes)}</td><td class="n">${miles(m.comentarios)}</td><td class="n">${miles(m.guardados)}</td><td class="n">${miles(m.compartidos)}</td><td>${esc(m.nota)}</td></tr>`).join("") + "</tbody>"
     : `<tbody><tr><td class="vacio">Todavía no hay mediciones.</td></tr></tbody>`;
 }
 
@@ -656,10 +800,10 @@ document.querySelectorAll("#p-filtro button").forEach(b => b.addEventListener("c
   pintarPedidos();
 }));
 function pintarPedidos() {
-  pintarPedir();
+  pintarPedir(); pintarConteos();
   const abierto = p => p.vivo === "pendiente" || p.vivo === "en curso";
   const prio = { alta: 0, normal: 1, baja: 2 };
-  const filas = E.cuentas.flatMap(c => c.pedidos.map(p => ({ ...p, cuenta_nombre: c.nombre })))
+  const filas = E.cuentas.flatMap(c => c.pedidos.map(p => ({ ...p, cuenta_nombre: c.nombre, cuenta_slug: c.slug })))
     .filter(p => filtroPedidos === "todos" || abierto(p))
     .sort((a, b) => (abierto(b) - abierto(a)) || ((prio[a.prioridad] ?? 1) - (prio[b.prioridad] ?? 1))
       || String(a.para || "9999").localeCompare(String(b.para || "9999")) || a.id.localeCompare(b.id));
@@ -668,7 +812,7 @@ function pintarPedidos() {
     return;
   }
   $("#pedidos").innerHTML = filas.map(p => {
-    const meta = [esc(p.id), esc(p.cuenta_nombre), esc(p.fecha)];
+    const meta = [esc(p.id)].concat(filtroPedidos === "todos" ? [esc(p.cuenta_nombre)] : [], [esc(p.fecha)]);
     if (p.formato && p.formato !== "reel") meta.push(esc(p.formato));
     if (p.prioridad && p.prioridad !== "normal") meta.push(p.prioridad === "alta" ? `<span class="alta">prioridad alta</span>` : "prioridad baja");
     if (p.para) meta.push("para el " + esc(p.para));
@@ -680,13 +824,12 @@ function pintarPedidos() {
     if (post) extra.push("post: " + esc(post));
     const ver = p.paquete && (p.vivo === "listo" || p.vivo === "publicado")
       ? ` <button type="button" class="btn sec chico" data-ver-publicar>Ver en Publicar</button>` : "";
-    return `<div class="pedido">
-      <span class="chip ${esc(p.vivo.replace(" ", "-"))}">${esc(p.vivo)}</span>${ver}
-      <div class="idea">${esc(p.idea)}</div>
+    return `<div class="pedido" title="${esc(p.cuenta_nombre)}">${av(p.cuenta_slug, 20)}<div>
+      <div class="linea"><div class="idea">${esc(p.idea)}</div><span class="chip ${esc(p.vivo.replace(" ", "-"))}">${esc(p.vivo)}</span></div>
       <div class="handle">${meta.join(" · ")}</div>
       ${extra.length ? `<div class="handle">${extra.join(" · ")}</div>` : ""}
-      ${p.notas ? `<details><summary>Notas</summary>${esc(p.notas)}</details>` : ""}
-    </div>`;
+      ${p.notas ? `<details><summary>Notas</summary>${esc(p.notas)}</details>` : ""}${ver ? `<div class="btns">${ver.trim()}</div>` : ""}
+    </div></div>`;
   }).join("");
   $("#pedidos").querySelectorAll("[data-ver-publicar]").forEach(b => b.addEventListener("click", () => abrir("publicar")));
 }
@@ -698,14 +841,15 @@ function pintarPosts() {
   const rc = E.resumen.cuentas.find(r => r.slug === c.slug);
   const ultima = n => (rc.posts.find(p => p.post === n) || {}).ultima;
   const ps = c.posts.filter(p => !filtro || p.estado === filtro);
-  $("#t-posts").innerHTML = `<thead><tr><th>Post</th><th>Estado</th><th class="n">Vistas</th><th class="n">Likes</th><th>Medido</th><th></th></tr></thead><tbody>` +
+  $("#t-posts").innerHTML = `<thead><tr><th>Post</th><th>Estado</th><th class="n posts-n">Vistas</th><th class="n posts-n">Likes</th><th class="posts-n">Medido</th><th></th></tr></thead><tbody>` +
     (ps.length ? ps.map(p => {
       const m = ultima(p.nombre);
       const accion = p.estado === "listo"
         ? `<form class="acciones" data-subir="${esc(p.nombre)}"><input name="enlace" placeholder="https://www.instagram.com/reel/…" style="max-width:240px"><button class="btn sec">Ya lo subí</button></form>`
         : "";
-      return `<tr><td><b>${esc(p.titulo || p.nombre)}</b><div class="handle">${esc(p.nombre)}</div></td><td><span class="chip ${esc(p.estado || "")}">${esc(p.estado || "sin estado")}</span></td>` +
-        `<td class="n">${miles(m && m.vistas)}</td><td class="n">${miles(m && m.likes)}</td><td>${m ? esc(m.fecha) : "—"}</td><td>${accion}</td></tr>`;
+      const linea = `${miles(m && m.vistas)} vistas · ${miles(m && m.likes)} likes · ${m ? "medido el " + esc(m.fecha) : "sin medir"}`;
+      return `<tr><td><b>${esc(p.titulo || p.nombre)}</b><div class="handle">${esc(p.nombre)}</div><div class="posts-linea">${linea}</div></td><td><span class="chip ${esc(p.estado || "")}">${esc(p.estado || "sin estado")}</span></td>` +
+        `<td class="n posts-n">${miles(m && m.vistas)}</td><td class="n posts-n">${miles(m && m.likes)}</td><td class="posts-n">${m ? esc(m.fecha) : "—"}</td><td class="accion">${accion}</td></tr>`;
     }).join("") : `<tr><td colspan="6" class="vacio">Ningún post con ese estado.</td></tr>`) + "</tbody>";
   document.querySelectorAll("[data-subir]").forEach(f => f.addEventListener("submit", async ev => {
     ev.preventDefault();
@@ -725,7 +869,7 @@ async function cargarOrden() {
   const r = await fetch("/api/orden");
   const j = await r.json();
   if (!r.ok) { $("#o-secciones").innerHTML = `<div class="card aviso">${esc(j.error)}</div>`; return; }
-  O = j; pintarOrden();
+  O = j; pintarOrden(); if (E) pintarConteos();
 }
 async function copiar(texto, boton) {
   try { await navigator.clipboard.writeText(texto); }
@@ -741,57 +885,97 @@ const ruta = (nombre, rel, abs) =>
   `<div class="ruta"><b>${nombre}</b><code title="${esc(abs)}">${esc(abs)}</code>` +
   `<button class="btn sec chico" data-copiar-ruta="${esc(abs)}">Copiar ruta</button>` +
   `<button class="btn sec chico" data-revelar="${esc(rel)}">Mostrar en Finder</button></div>`;
+const abiertos = new Set();
+function encabezado(s, quedan) {
+  return `<h2>${s.cuenta ? av(s.cuenta, 34) : ""}${esc(s.titulo)} <span class="handle">${quedan} por subir</span></h2>` +
+    (s.nota ? `<details><summary>Notas de la cuenta</summary><pre>${esc(s.nota)}</pre></details>` : "");
+}
+function colorDe(s) { const c = cta(s.cuenta); return c && c.color ? ` style="--c:${esc(c.color)}"` : ""; }
+// un paquete desplegado: el video, el caption, el alt text, las rutas y «Ya lo subí»
+function tarjeta(s, p, i, sig) {
+  const esSig = i === sig;
+  const clase = p.publicado ? "hecho" : (esSig ? "siguiente" : "");
+  const pri = esSig ? "btn" : "btn sec";
+  const estado = p.publicado
+    ? `<span class="chip publicado">publicado${p.fecha ? " · " + esc(p.fecha) : ""}</span>${p.enlace ? ` <a href="${esc(p.enlace)}" target="_blank" rel="noopener">ver</a>` : ""}`
+    : (esSig ? `<span class="chip listo">el siguiente</span>` : `<span class="chip">por subir</span>`);
+  const video = p.video
+    ? `<video controls preload="metadata" ${p.portada ? `poster="${url(p.portada)}"` : ""} src="${url(p.video)}"></video>`
+    : `<div class="sinvideo">sin video</div>`;
+  const bloque = (nombre, texto, extra) => texto ? `<div class="texto"><div class="fila"><b>${nombre}</b><button class="${pri} chico" data-copiar="${nombre}">Copiar ${nombre.toLowerCase()}</button></div>${extra ? `<div class="meta">${extra}</div>` : ""}<pre>${esc(texto)}</pre></div>` : "";
+  const capInfo = p.caption ? `${miles(p.caracteres)} / 2${NBSP}200 caracteres · ${p.hashtags} hashtags` : "";
+  const cerrar = !esSig && abiertos.has(p.carpeta) ? `<button type="button" class="btn sec chico" data-abrir="${esc(p.carpeta)}">Cerrar</button>` : "";
+  return `<div class="card paquete ${clase}"${colorDe(s)} data-carpeta="${esc(p.carpeta)}">
+    <div>${video}</div>
+    <div>
+      <div class="titulo-p"><h3><span class="num">${i + 1}</span>${esc(p.titulo)}</h3>${cerrar}</div>
+      <div>${estado}</div>
+      ${bloque("Caption", p.caption, capInfo)}
+      ${bloque("Alt text", p.alt, "Configuración avanzada → Accesibilidad")}
+      <div class="rutas">
+        ${p.video_abs ? ruta("Video", p.video, p.video_abs) : ""}
+        ${p.portada_abs ? ruta("Portada", p.portada, p.portada_abs) : ""}
+      </div>
+      <div class="btns">
+        ${p.video ? `<a class="btn sec chico" href="${url(p.video)}&descargar=1">Bajar video</a>` : ""}
+        ${p.portada ? `<a class="btn sec chico" href="${url(p.portada)}&descargar=1">Bajar portada</a>` : ""}
+      </div>
+      ${p.falta.length ? `<div class="avisos">Falta: ${p.falta.map(esc).join(", ")}</div>` : ""}
+      ${!p.publicado || !p.enlace ? `<form class="acciones subir">
+        <input name="enlace" placeholder="enlace del reel (opcional)">
+        <button class="${pri}">${p.publicado ? "Guardar enlace" : "Ya lo subí"}</button><span class="msg"></span></form>` : ""}
+    </div>
+  </div>`;
+}
+// un paquete plegado: una fila que se abre
+function fila(s, p, i) {
+  const estado = p.publicado
+    ? `<span class="chip publicado">publicado${p.fecha ? " · " + esc(p.fecha) : ""}</span>`
+    : `<span class="chip">por subir</span>`;
+  return `<div class="card paquete-fila${p.publicado ? " hecho" : ""}"${colorDe(s)}>
+    <span class="num">${i + 1}</span><span class="t">${esc(p.titulo)}</span>${estado}
+    <button type="button" class="btn sec chico" data-abrir="${esc(p.carpeta)}">Abrir</button></div>`;
+}
 function pintarOrden() {
   const todos = $("#o-todos").checked;
   const secs = O.secciones;
-  $("#o-cuentas").innerHTML = [["", "Todas"], ...secs.map(s => [s.titulo, s.titulo])]
-    .map(([v, t]) => `<button type="button" data-v="${esc(v)}" aria-pressed="${v === filtroCuenta}">${esc(t)}</button>`).join("");
+  const quedan = s => s.paquetes.filter(p => !p.publicado).length;
+  const total = secs.reduce((n, s) => n + quedan(s), 0);
+  $("#o-cuentas").innerHTML = [["", "Todas", "", total], ...secs.map(s => [s.titulo, corto(cta(s.cuenta)) || s.titulo, s.cuenta, quedan(s)])]
+    .map(([v, t, slug, n]) => `<button type="button" data-v="${esc(v)}" aria-pressed="${v === filtroCuenta}">${slug ? av(slug) : ""}<span>${esc(t)}</span>${n ? `<span class="cuenta-n">${n}</span>` : ""}</button>`).join("");
   $("#o-cuentas").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
     filtroCuenta = b.dataset.v; try { localStorage.setItem("cuentas-orden-cuenta", filtroCuenta); } catch (_) {}
     pintarOrden();
   }));
-  const pend = secs.reduce((n, s) => n + s.paquetes.filter(p => !p.publicado).length, 0);
-  $("#o-resumen").textContent = `${pend} por subir en ${secs.length} cuentas`;
-  const html = secs.filter(s => !filtroCuenta || s.titulo === filtroCuenta).map(s => {
-    const sig = s.paquetes.findIndex(p => !p.publicado);
-    const quedan = s.paquetes.filter(p => !p.publicado).length;
-    const cards = s.paquetes.map((p, i) => ({ p, i })).filter(({ p }) => todos || !p.publicado).map(({ p, i }) => {
-      const clase = p.publicado ? "hecho" : (i === sig ? "siguiente" : "");
-      const estado = p.publicado
-        ? `<span class="chip publicado">publicado${p.fecha ? " · " + esc(p.fecha) : ""}</span>${p.enlace ? ` <a href="${esc(p.enlace)}" target="_blank" rel="noopener">ver</a>` : ""}`
-        : (i === sig ? `<span class="chip listo">el siguiente</span>` : `<span class="chip">por subir</span>`);
-      const video = p.video
-        ? `<video controls preload="metadata" ${p.portada ? `poster="${url(p.portada)}"` : ""} src="${url(p.video)}"></video>`
-        : `<div class="sinvideo">sin video</div>`;
-      const bloque = (nombre, texto, extra) => texto ? `<div class="texto"><div class="fila"><b>${nombre}</b><span class="handle">${extra || ""}</span><button class="btn chico" data-copiar="${nombre}">Copiar ${nombre.toLowerCase()}</button></div><pre>${esc(texto)}</pre></div>` : "";
-      const capInfo = p.caption ? `${miles(p.caracteres)} / 2${NBSP}200 caracteres · ${p.hashtags} hashtags` : "";
-      return `<div class="card paquete ${clase}" data-carpeta="${esc(p.carpeta)}">
-        <div>${video}</div>
-        <div>
-          <h3><span class="num">${i + 1}</span>${esc(p.titulo)}</h3>
-          <div>${estado}</div>
-          ${bloque("Caption", p.caption, capInfo)}
-          ${bloque("Alt text", p.alt, "Configuración avanzada → Accesibilidad")}
-          <div class="rutas">
-            ${p.video_abs ? ruta("Video", p.video, p.video_abs) : ""}
-            ${p.portada_abs ? ruta("Portada", p.portada, p.portada_abs) : ""}
-          </div>
-          <div class="btns">
-            ${p.video ? `<a class="btn sec chico" href="${url(p.video)}&descargar=1">Bajar video</a>` : ""}
-            ${p.portada ? `<a class="btn sec chico" href="${url(p.portada)}&descargar=1">Bajar portada</a>` : ""}
-          </div>
-          ${p.falta.length ? `<div class="avisos">Falta: ${p.falta.map(esc).join(", ")}</div>` : ""}
-          ${!p.publicado || !p.enlace ? `<form class="acciones subir" style="margin-top:10px">
-            <input name="enlace" placeholder="enlace del reel (opcional)" style="max-width:300px">
-            <button class="btn chico">${p.publicado ? "Guardar enlace" : "Ya lo subí"}</button><span class="msg"></span></form>` : ""}
-        </div>
-      </div>`;
+  const vistas = secs.filter(s => !filtroCuenta || s.titulo === filtroCuenta);
+  const sigDe = s => s.paquetes.findIndex(p => !p.publicado);
+  // lo de después: plegado salvo lo que abriste
+  const resto = s => {
+    const sig = sigDe(s);
+    return s.paquetes.map((p, i) => ({ p, i })).filter(({ p, i }) => i !== sig && (todos || !p.publicado))
+      .map(({ p, i }) => abiertos.has(p.carpeta) ? tarjeta(s, p, i, sig) : fila(s, p, i)).join("");
+  };
+  let html;
+  if (!filtroCuenta) {
+    // primero, el siguiente de cada cuenta, desplegado; después, lo demás de cada una
+    const siguientes = vistas.filter(s => sigDe(s) >= 0).map(s =>
+      `<div class="seccion-o">${encabezado(s, quedan(s))}${tarjeta(s, s.paquetes[sigDe(s)], sigDe(s), sigDe(s))}</div>`).join("");
+    const despues = vistas.map(s => { const r = resto(s); return r ? `<div class="seccion-o">${encabezado(s, quedan(s))}${r}</div>` : ""; }).join("");
+    html = (siguientes ? `<h2 class="bloque">El siguiente de cada cuenta</h2>${siguientes}` : `<div class="vacio">Nada por subir. Activa «mostrar los ya publicados» para verlos.</div>`) +
+      (despues ? `<h2 class="bloque">Después</h2>${despues}` : "");
+  } else {
+    html = vistas.map(s => {
+      const sig = sigDe(s);
+      const cuerpo = (sig >= 0 ? tarjeta(s, s.paquetes[sig], sig, sig) : "") + resto(s);
+      return `<div class="seccion-o">${encabezado(s, quedan(s))}${cuerpo || `<div class="vacio">Nada por subir aquí. Activa «mostrar los ya publicados» para verlos.</div>`}</div>`;
     }).join("");
-    return `<div class="seccion-o"><h2>${esc(s.titulo)} <span class="handle">${quedan} por subir</span></h2>
-      ${s.nota ? `<details><summary>Notas de la cuenta</summary><pre>${esc(s.nota)}</pre></details>` : ""}
-      ${cards || `<div class="vacio">Nada por subir aquí. Activa «mostrar los ya publicados» para verlos.</div>`}</div>`;
-  }).join("");
+  }
   $("#o-secciones").innerHTML = html;
+  $("#o-secciones").querySelectorAll("[data-abrir]").forEach(b => b.addEventListener("click", () => {
+    const k = b.dataset.abrir;
+    abiertos.has(k) ? abiertos.delete(k) : abiertos.add(k);
+    pintarOrden();
+  }));
   document.querySelectorAll(".paquete").forEach(card => {
     const p = O.secciones.flatMap(s => s.paquetes).find(x => x.carpeta === card.dataset.carpeta);
     card.querySelectorAll("[data-copiar]").forEach(b => b.addEventListener("click", () =>
@@ -812,7 +996,7 @@ function pintarOrden() {
       const enlace = f.elements.enlace.value.trim();
       if (!p.publicado && !confirm(`¿Marcar «${p.titulo}» como publicado hoy?`)) return;
       const ok = await enviar("/api/orden/publicado", { carpeta: p.carpeta, enlace: enlace || null }, f.querySelector(".msg"));
-      if (ok) await cargarOrden();
+      if (ok) { abiertos.delete(p.carpeta); await cargarOrden(); }
     });
   });
 }
