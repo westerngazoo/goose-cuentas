@@ -26,6 +26,8 @@ uso: cuentas [--vault DIR] <comando>
   stats ver [<cuenta>] [--json]   las mediciones tal como están en el vault
 
   pedir <cuenta> <idea…>          pide un reel: un encargo en el repo de la cuenta
+        [--formato reel|short|youtube] [--prioridad alta|normal|baja] [--para AAAA-MM-DD]
+        [--nivel N] [--variante A --variante B] [--remake <post viejo>] [--notas \"…\"]
   pedidos [<cuenta>]              los encargos y su estado
   publicado <cuenta> <post> [--enlace URL] [--fecha F]
                                   el dueño lo subió: marca su README
@@ -306,8 +308,32 @@ fn correr(v: Vec<String>) -> Result<(), String> {
             Ok(())
         }
         ["pedir", cuenta, idea @ ..] if !idea.is_empty() => {
-            a.solo(&["--vault"])?;
-            let (e, repo) = acciones::pedir(&vault, cuenta, &idea.join(" "), &hoy)?;
+            a.solo(&[
+                "--vault",
+                "--formato",
+                "--prioridad",
+                "--para",
+                "--nivel",
+                "--variante",
+                "--remake",
+                "--notas",
+            ])?;
+            let d = guion_tablero::encargos::Detalles {
+                formato: a.valor("--formato").map(str::to_string),
+                prioridad: a.valor("--prioridad").map(str::to_string),
+                para: a.valor("--para").map(str::to_string),
+                nivel: a.valor("--nivel").map(str::to_string),
+                variantes: a
+                    .opciones
+                    .iter()
+                    .filter(|(o, _)| o == "--variante")
+                    .filter_map(|(_, v)| v.clone())
+                    .collect(),
+                remake: a.valor("--remake").map(str::to_string),
+                notas: a.valor("--notas").map(str::to_string),
+                post: None,
+            };
+            let (e, repo) = acciones::pedir(&vault, cuenta, &idea.join(" "), &hoy, &d)?;
             println!(
                 "{} para {}: «{}» (en {}/encargos.toml)",
                 e.id,
@@ -326,15 +352,17 @@ fn correr(v: Vec<String>) -> Result<(), String> {
                 .iter()
                 .filter(|c| resto.first().is_none_or(|s| *s == c.slug))
             {
-                for e in &c.pedidos {
-                    let post = e
-                        .post
+                for p in &c.pedidos {
+                    let e = &p.encargo;
+                    let post = p
+                        .post_ruta
                         .as_deref()
-                        .map(|p| format!(" → {p}"))
+                        .or(e.post.as_deref())
+                        .map(|r| format!(" → {r}"))
                         .unwrap_or_default();
                     println!(
                         "{} {}  {:<10} {:<10} {}{post}",
-                        e.id, e.fecha, c.slug, e.estado, e.idea
+                        e.id, e.fecha, c.slug, p.vivo, e.idea
                     );
                 }
             }

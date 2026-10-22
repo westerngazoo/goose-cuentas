@@ -148,6 +148,20 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
 }
 .chip.publicado { border-color: var(--series-1); color: var(--series-1); }
 .chip.listo { border-color: var(--text-secondary); color: var(--text-primary); }
+.chip.en-curso { border-style: dashed; color: var(--text-primary); }
+.chip.descartado { color: var(--text-muted); text-decoration: line-through; }
+fieldset.variantes { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px 10px; margin: 10px 0; display: grid; gap: 8px; }
+fieldset.variantes legend { font-size: 12px; color: var(--text-secondary); padding: 0 4px; }
+fieldset.variantes input { font-size: 12px; }
+fieldset.variantes .btn { justify-self: start; }
+#p-remake-l { grid-column: span 2; }
+@media (max-width: 820px) { #p-remake-l { grid-column: auto; } }
+.pedido { padding: 10px 0; border-top: 1px solid var(--grid); }
+.pedido:first-child { border-top: 0; }
+.pedido .idea { margin: 4px 0 2px; }
+.pedido .alta { color: var(--error); font-weight: 600; }
+.pedido details { margin-top: 4px; font-size: 13px; color: var(--text-secondary); }
+#p-filtro { margin-bottom: 6px; }
 .nota { color: var(--text-muted); font-size: 12px; margin: 6px 0 0; }
 .aviso { color: var(--error); font-size: 12px; margin-top: 8px; }
 .filtros { margin-bottom: 14px; }
@@ -284,14 +298,48 @@ a.btn { text-decoration: none; display: inline-block; }
                 <option value="youtube">YouTube largo (16:9)</option>
               </select>
             </label>
+            <label>Prioridad
+              <select name="prioridad">
+                <option value="normal">Normal</option>
+                <option value="alta">Alta</option>
+                <option value="baja">Baja</option>
+              </select>
+            </label>
+            <label>Para cuándo <input name="para" type="date"></label>
+          </div>
+          <div class="campos">
+            <label>Qué es
+              <select name="tipo" id="p-tipo">
+                <option value="nueva">Idea nueva</option>
+                <option value="remake">Remake</option>
+              </select>
+            </label>
+            <label id="p-remake-l" hidden>El post que se rehace
+              <select name="remake" id="p-remake"></select>
+            </label>
+            <label id="p-remake-otro-l" hidden>Su nombre <input name="remake_otro" id="p-remake-otro" maxlength="120" placeholder="04-press"></label>
+            <label><span id="p-nivel-t">Nivel</span> <input name="nivel" id="p-nivel" maxlength="80"></label>
           </div>
           <label>La pregunta (una línea) <input name="idea" required maxlength="300" placeholder="¿Por qué el kart levanta una rueda?"></label>
+          <fieldset class="variantes">
+            <legend>Qué compara <span class="handle">(opcional, de 2 a 4)</span></legend>
+            <div class="campos" id="p-variantes">
+              <input name="variante" maxlength="60" placeholder="pegado" aria-label="Variante 1">
+              <input name="variante" maxlength="60" placeholder="inclinado" aria-label="Variante 2">
+            </div>
+            <button type="button" class="btn sec chico" id="p-mas">+ otra variante</button>
+          </fieldset>
+          <label>Notas <span class="handle">(fuentes, lo que no debe decir, ideas de imagen)</span><textarea name="notas" maxlength="1000"></textarea></label>
           <div class="acciones"><button class="btn">Pedir</button><span class="msg" id="p-msg" role="status"></span></div>
-          <p class="nota">Queda como encargo «pendiente» en el repo de la cuenta. El agente de la cuenta lo toma desde ahí y lo lleva hasta «listo». Publicar sigue siendo tuyo.</p>
+          <p class="nota">Queda como encargo «pendiente» en el repo de la cuenta. Cuando el agente lo toma, se enlaza a su post y aquí ves su estado real: en curso, listo (con el paquete en Publicar) o publicado. Publicar sigue siendo tuyo.</p>
         </form>
       </div>
       <div class="card">
         <h2>Pedidos</h2>
+        <div class="chips" id="p-filtro" role="group" aria-label="Qué pedidos ver">
+          <button type="button" data-f="abiertos" aria-pressed="true">Abiertos</button>
+          <button type="button" data-f="todos" aria-pressed="false">Todos</button>
+        </div>
         <div id="pedidos"></div>
       </div>
     </div>
@@ -533,12 +581,63 @@ $("#f-seguidores").addEventListener("submit", async ev => {
   } catch (e) { msg.className = "msg error"; msg.textContent = e.message; }
 });
 
+// ---------- pedir
+const NIVEL = { rotor: ["Nivel", "1.3 (del currículo)"], computar: ["Parada de la serie", "Del electrón al bit · 2"], pmmo: ["Nivel", "opcional"], fbf: ["Articulación", "codo, hombro, cadera…"] };
+function pintarPedir() {
+  const slug = $("#p-cuenta").value;
+  const [t, ph] = NIVEL[slug] || ["Nivel", "opcional"];
+  $("#p-nivel-t").textContent = t; $("#p-nivel").placeholder = ph;
+  // los posts con números de esta cuenta, de más a menos likes (lo que mejor funcionó primero)
+  const r = E.resumen.cuentas.find(c => c.slug === slug);
+  const c = E.cuentas.find(c => c.slug === slug);
+  const pedidos = new Map((c ? c.pedidos : []).filter(p => p.remake).map(p => [p.remake, p.id]));
+  const num = (p, k) => (p.ultima && p.ultima[k]) || 0;
+  const ps = (r ? r.posts : []).slice().sort((a, b) => num(b, "likes") - num(a, "likes") || num(b, "vistas") - num(a, "vistas"));
+  // lo elegido se conserva solo dentro de la misma cuenta
+  const v = $("#p-remake").dataset.cuenta === slug ? $("#p-remake").value : "";
+  $("#p-remake").dataset.cuenta = slug;
+  $("#p-remake").innerHTML = ps.map(p => {
+    const ya = pedidos.get(p.post);
+    const n = `${miles(num(p, "likes"))} likes · ${miles(num(p, "vistas"))} vistas`;
+    return `<option value="${esc(p.post)}">${esc(p.post)} · ${n}${ya ? " · ya pedido (" + esc(ya) + ")" : ""}</option>`;
+  }).join("") + `<option value="__otro">otro (escribe su nombre)…</option>`;
+  if (v && [...$("#p-remake").options].some(o => o.value === v)) $("#p-remake").value = v;
+  else $("#p-remake").selectedIndex = 0;
+  const remake = $("#p-tipo").value === "remake";
+  $("#p-remake-l").hidden = !remake;
+  $("#p-remake-otro-l").hidden = !remake || $("#p-remake").value !== "__otro";
+}
+for (const id of ["#p-cuenta", "#p-tipo", "#p-remake"]) $(id).addEventListener("change", pintarPedir);
+$("#p-mas").addEventListener("click", () => {
+  const box = $("#p-variantes"), n = box.children.length;
+  if (n >= 4) return;
+  box.insertAdjacentHTML("beforeend", `<input name="variante" maxlength="60" aria-label="Variante ${n + 1}">`);
+  box.lastElementChild.focus();
+  if (n + 1 >= 4) $("#p-mas").disabled = true;
+});
 $("#f-pedido").addEventListener("submit", async ev => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  const formato = f.get("formato");
-  const idea = String(f.get("idea")).trim() + (formato === "reel" ? "" : ` (formato: ${formato})`);
-  if (await enviar("/api/pedido", { cuenta: f.get("cuenta"), idea }, $("#p-msg"))) ev.target.elements.idea.value = "";
+  const msg = $("#p-msg");
+  const variantes = f.getAll("variante").map(v => String(v).trim()).filter(Boolean);
+  if (variantes.length === 1) { msg.className = "msg error"; msg.textContent = "Lo que compara son al menos dos: escribe la otra variante o borra la que hay."; return; }
+  let remake = null;
+  if (f.get("tipo") === "remake") {
+    remake = f.get("remake") === "__otro" ? String(f.get("remake_otro") || "").trim() : f.get("remake");
+    if (!remake) { msg.className = "msg error"; msg.textContent = "¿Qué post se rehace? Escribe su nombre."; return; }
+  }
+  const cuerpo = {
+    cuenta: f.get("cuenta"), idea: String(f.get("idea")).trim(),
+    formato: f.get("formato"), prioridad: f.get("prioridad"),
+    para: f.get("para") || null, nivel: String(f.get("nivel") || "").trim() || null,
+    variantes, remake, notas: String(f.get("notas") || "").trim() || null,
+  };
+  if (await enviar("/api/pedido", cuerpo, msg)) {
+    const el = ev.target.elements;
+    for (const k of ["idea", "notas", "nivel", "para", "remake_otro"]) if (el[k]) el[k].value = "";
+    $("#p-variantes").querySelectorAll("input").forEach((i, k) => k < 2 ? i.value = "" : i.remove());
+    $("#p-mas").disabled = false;
+  }
 });
 
 // ---------- tablas
@@ -550,11 +649,46 @@ function pintarMediciones() {
     : `<tbody><tr><td class="vacio">Todavía no hay mediciones.</td></tr></tbody>`;
 }
 
+let filtroPedidos = "abiertos";
+document.querySelectorAll("#p-filtro button").forEach(b => b.addEventListener("click", () => {
+  filtroPedidos = b.dataset.f;
+  document.querySelectorAll("#p-filtro button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  pintarPedidos();
+}));
 function pintarPedidos() {
-  const filas = E.cuentas.flatMap(c => c.pedidos.map(p => ({ ...p, cuenta_nombre: c.nombre }))).reverse();
-  $("#pedidos").innerHTML = filas.length ? `<table><tbody>` + filas.map(p =>
-    `<tr><td><span class="chip">${esc(p.estado)}</span></td><td>${esc(p.idea)}<div class="handle">${esc(p.id)} · ${esc(p.cuenta_nombre)} · ${esc(p.fecha)}${p.post ? " → " + esc(p.post) : ""}</div></td></tr>`).join("") + `</tbody></table>`
-    : `<div class="vacio">Sin pedidos todavía.</div>`;
+  pintarPedir();
+  const abierto = p => p.vivo === "pendiente" || p.vivo === "en curso";
+  const prio = { alta: 0, normal: 1, baja: 2 };
+  const filas = E.cuentas.flatMap(c => c.pedidos.map(p => ({ ...p, cuenta_nombre: c.nombre })))
+    .filter(p => filtroPedidos === "todos" || abierto(p))
+    .sort((a, b) => (abierto(b) - abierto(a)) || ((prio[a.prioridad] ?? 1) - (prio[b.prioridad] ?? 1))
+      || String(a.para || "9999").localeCompare(String(b.para || "9999")) || a.id.localeCompare(b.id));
+  if (!filas.length) {
+    $("#pedidos").innerHTML = `<div class="vacio">${filtroPedidos === "abiertos" ? "No hay pedidos abiertos." : "Sin pedidos todavía."}</div>`;
+    return;
+  }
+  $("#pedidos").innerHTML = filas.map(p => {
+    const meta = [esc(p.id), esc(p.cuenta_nombre), esc(p.fecha)];
+    if (p.formato && p.formato !== "reel") meta.push(esc(p.formato));
+    if (p.prioridad && p.prioridad !== "normal") meta.push(p.prioridad === "alta" ? `<span class="alta">prioridad alta</span>` : "prioridad baja");
+    if (p.para) meta.push("para el " + esc(p.para));
+    if (p.nivel) meta.push(esc(p.nivel));
+    const extra = [];
+    if (p.variantes && p.variantes.length) extra.push("compara: " + p.variantes.map(esc).join(" contra "));
+    if (p.remake) extra.push("rehace: " + esc(p.remake));
+    const post = p.post_ruta || p.post;
+    if (post) extra.push("post: " + esc(post));
+    const ver = p.paquete && (p.vivo === "listo" || p.vivo === "publicado")
+      ? ` <button type="button" class="btn sec chico" data-ver-publicar>Ver en Publicar</button>` : "";
+    return `<div class="pedido">
+      <span class="chip ${esc(p.vivo.replace(" ", "-"))}">${esc(p.vivo)}</span>${ver}
+      <div class="idea">${esc(p.idea)}</div>
+      <div class="handle">${meta.join(" · ")}</div>
+      ${extra.length ? `<div class="handle">${extra.join(" · ")}</div>` : ""}
+      ${p.notas ? `<details><summary>Notas</summary>${esc(p.notas)}</details>` : ""}
+    </div>`;
+  }).join("");
+  $("#pedidos").querySelectorAll("[data-ver-publicar]").forEach(b => b.addEventListener("click", () => abrir("publicar")));
 }
 
 function pintarPosts() {

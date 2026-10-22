@@ -54,7 +54,7 @@ Solo se abre en tu propia máquina (127.0.0.1). Tiene cinco pestañas:
 - **Publicar** (la que abre): lo que dice `publicar/ORDEN.md`, cuenta por cuenta y en orden. Cada reel trae su video para verlo ahí mismo, su caption y su texto alternativo con un botón para copiarlos, la ruta local del video y de la portada (con «Copiar ruta», para pegarla en el diálogo de subir, y «Mostrar en Finder»), los botones para bajarlos, y «Ya lo subí» con el enlace. Ese botón marca la entrada en `ORDEN.md` y el README del post. El siguiente de cada cuenta va resaltado.
 - **Tablero:** cada cuenta con sus seguidores, vistas, likes e interacción; una gráfica de seguidores en el tiempo y otra de vistas por post.
 - **Capturar:** las cifras de un post (vistas, alcance, likes, comentarios, guardados, compartidos, seguidores ganados) y los seguidores de una cuenta.
-- **Pedir reel:** la cuenta, el formato y la pregunta.
+- **Pedir reel:** la cuenta y la pregunta, y si quieres el formato, la prioridad, para cuándo, el nivel (o la parada de la serie, o la articulación en fbf), lo que compara (de 2 a 4 variantes) y notas. «Remake» te deja elegir el post viejo que se rehace, de la lista de los que capturaste, ordenados de más a menos likes; marca los que ya pediste. A la derecha, los pedidos abiertos (o todos) con su estado real: cuando el agente toma uno, se enlaza a su post y desde ahí el pedido sigue al README de ese post (en curso, listo con «Ver en Publicar», publicado), sin que nadie lo vuelva a escribir.
 - **Posts:** el estado de cada post y el botón «Ya lo subí».
 
 Escribe los mismos archivos que la línea de comandos. Se cierra con Ctrl-C.
@@ -68,6 +68,7 @@ cuentas stats post rotor deriva --vistas 1500 --likes 90 --guardados 12 --compar
 cuentas stats post fbf 04-press --likes 2523     # un post viejo, sin carpeta
 cuentas stats ver rotor
 cuentas pedir pmmo "¿Por qué los cuaterniones son planos?"   # un pedido de reel
+cuentas pedir fbf "¿Press plano o inclinado?" --remake 12-press --variante plano --variante inclinado --prioridad alta
 cuentas pedidos
 cuentas publicado rotor rueda --enlace https://www.instagram.com/reel/…
 cuentas nota                                     # reescribe cuentas/resumen.md
@@ -80,7 +81,9 @@ cuentas nota                                     # reescribe cuentas/resumen.md
 - Cada medición es una fila nueva. La historia es el dato: el tablero usa la
   más reciente de cada post.
 - `pedir` agrega un encargo al `encargos.toml` del repo de la cuenta, el mismo
-  que lee `guion tablero`. El agente de la cuenta lo toma desde ahí.
+  que lee `guion tablero`. El agente de la cuenta lo toma con `guion encargo
+  tomar <id> <post>`, y desde ahí `cuentas pedidos` y la interfaz muestran el
+  estado del post que lo atiende.
 - `publicado` reescribe la línea `estado:` del README del post. El commit en el
   repo de la cuenta lo haces tú o el agente.
 

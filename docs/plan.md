@@ -8,7 +8,7 @@ Qué se abstrae, en qué orden y qué queda en cada capa.
 |---|---|---|
 | Las cuentas | Cuatro carpetas con su manual y su `guion-cuentas.toml` | Un registro (`cuentas.toml` en el vault) que apunta a ellas. Una cuenta nueva es `guion cuenta nueva` más una entrada aquí. |
 | El ciclo de un post | La línea `estado:` de cada README, `ORDEN.md` y `PENDIENTES.md` escritos a mano | Los estados se leen de los READMEs (`guion-tablero`). `ORDEN.md` se genera de ahí (fase 4). |
-| Pedir un reel | Un mensaje en el chat | `cuentas pedir` → `encargos.toml` del repo de la cuenta → el agente lo toma con la skill `hacer-video` (fase 2: una cola local). |
+| Pedir un reel | Un mensaje en el chat | `cuentas pedir` (con formato, prioridad, para cuándo, nivel, variantes, remake y notas) → `encargos.toml` del repo de la cuenta → el agente lo toma con `guion encargo tomar` y desde ahí el pedido sigue al README de su post (2026-10-22). Falta: que alguien los tome solo (fase 2). |
 | La entrega | `tools/publicar.sh` con una función por cuenta | Un empaquetador genérico en guion-video-creator, alimentado por `cuenta.toml` (fase 4). |
 | Las estadísticas | Ninguna | Mediciones con fecha en el vault, a mano (fase 0). La API solo si se cierra OQ-4 (fase 3). |
 
