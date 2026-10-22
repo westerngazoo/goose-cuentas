@@ -4,8 +4,8 @@
 
 use std::path::{Path, PathBuf};
 
-use guion_tablero::encargos::Encargo;
-use guion_tablero::tablero::Tablero;
+use guion_tablero::encargos::{Detalles, Encargo};
+use guion_tablero::tablero::{EncargoEn, Tablero};
 use serde::Serialize;
 
 use crate::estadisticas::{self, Medicion, Seguidores};
@@ -52,17 +52,20 @@ pub fn medir_seguidores(vault: &Vault, s: &Seguidores, hoy: &str) -> Result<Path
 }
 
 /// Pide un reel: un encargo `pendiente` en el `encargos.toml` del repo de la
-/// cuenta. Devuelve el encargo y el repo.
+/// cuenta, con lo que el dueño quiera precisar (formato, prioridad, para
+/// cuándo, nivel, las variantes, el post viejo que rehace, notas). Lo valida
+/// guion-tablero antes de escribir. Devuelve el encargo y el repo.
 pub fn pedir(
     vault: &Vault,
     cuenta: &str,
     idea: &str,
     hoy: &str,
+    detalles: &Detalles,
 ) -> Result<(Encargo, PathBuf), String> {
     let reg = Registro::leer(&vault.registro())?;
     let c = reg.cuenta(cuenta)?;
     let repo = reg.repo(c);
-    let e = tablero_de(&repo)?.encargar(&c.nombre, idea, hoy, None)?;
+    let e = tablero_de(&repo)?.encargar_con(&c.nombre, idea, hoy, detalles)?;
     Ok((e, repo))
 }
 
@@ -110,7 +113,8 @@ pub struct CuentaRepo {
     pub instagram: String,
     pub repo: String,
     pub posts: Vec<PostRepo>,
-    pub pedidos: Vec<Encargo>,
+    /// Con lo que son ahora (`vivo`): el estado del post que lo tomó.
+    pub pedidos: Vec<EncargoEn>,
     pub aviso: Option<String>,
 }
 
@@ -145,7 +149,7 @@ pub fn cuentas(vault: &Vault) -> Result<Vec<CuentaRepo>, String> {
                                 estado: p.estado.map(|e| e.nombre().to_string()),
                             })
                             .collect();
-                        out.pedidos = t.encargos_de(tc).cloned().collect();
+                        out.pedidos = t.pedidos_de(tc).cloned().collect();
                     }
                     None => {
                         out.aviso = Some(format!("«{}» no está en su guion-cuentas.toml", c.nombre))

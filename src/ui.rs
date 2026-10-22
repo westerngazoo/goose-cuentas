@@ -8,7 +8,7 @@
 //! | `GET /api/estado` | el resumen, las mediciones, las cuentas con sus posts y pedidos |
 //! | `POST /api/medicion` | una medición de un post → `{"ok"}` o 400 con el problema |
 //! | `POST /api/seguidores` | una medición de seguidores |
-//! | `POST /api/pedido` | `{"cuenta","idea"}` → el encargo |
+//! | `POST /api/pedido` | `{"cuenta","idea"}` y, si quieres, `formato`, `prioridad`, `para`, `nivel`, `variantes`, `remake`, `notas` → el encargo |
 //! | `POST /api/publicado` | `{"cuenta","post","enlace"?,"fecha"?}` → la línea nueva |
 //! | `GET /api/orden` | las secciones de `publicar/ORDEN.md` con sus paquetes |
 //! | `POST /api/orden/publicado` | `{"carpeta","enlace"?,"fecha"?}` → ORDEN.md y el README del post |
@@ -123,6 +123,35 @@ struct SeguidoresIn {
 struct PedidoIn {
     cuenta: String,
     idea: String,
+    #[serde(default)]
+    formato: Option<String>,
+    #[serde(default)]
+    prioridad: Option<String>,
+    #[serde(default)]
+    para: Option<String>,
+    #[serde(default)]
+    nivel: Option<String>,
+    #[serde(default)]
+    variantes: Vec<String>,
+    #[serde(default)]
+    remake: Option<String>,
+    #[serde(default)]
+    notas: Option<String>,
+}
+
+impl PedidoIn {
+    fn detalles(&self) -> guion_tablero::encargos::Detalles {
+        guion_tablero::encargos::Detalles {
+            formato: self.formato.clone(),
+            prioridad: self.prioridad.clone(),
+            para: self.para.clone(),
+            nivel: self.nivel.clone(),
+            variantes: self.variantes.clone(),
+            remake: self.remake.clone(),
+            notas: self.notas.clone(),
+            post: None,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -234,7 +263,7 @@ pub fn responder(vault: &Vault, puerto: u16, hoy: &str, p: &Peticion) -> Respues
             Err(r) => return r,
         },
         ("POST", "/api/pedido") => match leer::<PedidoIn>(p) {
-            Ok(x) => acciones::pedir(vault, &x.cuenta, &x.idea, hoy).map(|(e, repo)| {
+            Ok(x) => acciones::pedir(vault, &x.cuenta, &x.idea, hoy, &x.detalles()).map(|(e, repo)| {
                 json!({ "ok": format!("{} pedido: «{}»", e.id, e.idea), "encargo": e, "repo": repo.display().to_string() })
             }),
             Err(r) => return r,
@@ -681,6 +710,60 @@ mod tests {
         assert!(std::fs::read_to_string(v.resumen_md())
             .unwrap()
             .contains("| Rotor | 390 |"));
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn un_pedido_con_detalles_y_su_estado_vivo() {
+        let (v, d) = mundo("pedido");
+        let hoy = "2026-10-22";
+        let pedir = |cuerpo: &str| responder(&v, 7171, hoy, &pet("POST", "/api/pedido", cuerpo));
+        let r = pedir(
+            r#"{"cuenta":"rotor","idea":"¿Pegado o inclinado?","formato":"short","prioridad":"alta","para":"2026-10-30","nivel":"1.3","variantes":["pegado","inclinado"],"remake":"31-triceps","notas":"sin músculos"}"#,
+        );
+        assert_eq!(r.estado, 200, "{}", r.texto());
+        // lo que no se entiende se rechaza, y no se escribe nada
+        for (malo, dice) in [
+            (r#"{"cuenta":"rotor","idea":"x","urgente":true}"#, "urgente"),
+            (
+                r#"{"cuenta":"rotor","idea":"x","formato":"tiktok"}"#,
+                "formato",
+            ),
+            (
+                r#"{"cuenta":"rotor","idea":"x","variantes":["solo"]}"#,
+                "variantes",
+            ),
+            (r#"{"cuenta":"rotor","idea":"x","para":"30/10"}"#, "para"),
+        ] {
+            let r = pedir(malo);
+            assert_eq!(r.estado, 400, "{malo}");
+            assert!(r.texto().contains(dice), "{malo}: {}", r.texto());
+        }
+        let repo = d.join("repo");
+        let todos = guion_tablero::encargos::load(&repo).unwrap();
+        assert_eq!(todos.len(), 1);
+        let e = &todos[0];
+        assert_eq!(
+            (
+                e.formato.as_deref(),
+                e.prioridad.as_deref(),
+                e.remake.as_deref()
+            ),
+            (Some("short"), Some("alta"), Some("31-triceps"))
+        );
+        assert_eq!(e.variantes, ["pegado", "inclinado"]);
+        // el agente lo toma para «deriva» (listo): la interfaz lo ve listo, con su post
+        guion_tablero::encargos::tomar(&repo, "E-0001", "deriva").unwrap();
+        let r = responder(&v, 7171, hoy, &pet("GET", "/api/estado", ""));
+        let j: Value = serde_json::from_slice(&r.cuerpo).unwrap();
+        let p = &j["cuentas"][0]["pedidos"][0];
+        assert_eq!(p["estado"], "en curso", "lo guardado");
+        assert_eq!(
+            p["vivo"], "listo",
+            "lo que es: el estado del README de su post"
+        );
+        assert_eq!(p["post_ruta"], "posts/deriva");
+        assert_eq!(p["variantes"][1], "inclinado");
         let _ = std::fs::remove_dir_all(d);
     }
 
