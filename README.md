@@ -49,9 +49,11 @@ las notas en otra carpeta (por ejemplo `Areas/Cuentas`), escribe ahí
 cuentas ui                 # abre http://127.0.0.1:7171 en tu navegador
 ```
 
-Solo se abre en tu propia máquina (127.0.0.1). Tiene cinco pestañas:
+Solo se abre en tu propia máquina (127.0.0.1). Cada cuenta se ve con su avatar y
+su color, los que declara su repo en `guion-cuentas.toml` (`avatar`, `color`).
+Las pestañas Publicar y Pedir reel llevan la cuenta de lo pendiente. Tiene cinco pestañas:
 
-- **Publicar** (la que abre): lo que dice `publicar/ORDEN.md`, cuenta por cuenta y en orden. Cada reel trae su video para verlo ahí mismo, su caption y su texto alternativo con un botón para copiarlos, la ruta local del video y de la portada (con «Copiar ruta», para pegarla en el diálogo de subir, y «Mostrar en Finder»), los botones para bajarlos, y «Ya lo subí» con el enlace. Ese botón marca la entrada en `ORDEN.md` y el README del post. El siguiente de cada cuenta va resaltado.
+- **Publicar** (la que abre): lo que dice `publicar/ORDEN.md`. Arriba, el siguiente de cada cuenta, desplegado; abajo, lo demás en filas que se abren. Cada reel trae su video para verlo ahí mismo, su caption y su texto alternativo con un botón para copiarlos, la ruta local del video y de la portada (con «Copiar ruta», para pegarla en el diálogo de subir, y «Mostrar en Finder»), los botones para bajarlos, y «Ya lo subí» con el enlace. Ese botón marca la entrada en `ORDEN.md` y el README del post. El siguiente de cada cuenta va resaltado.
 - **Tablero:** cada cuenta con sus seguidores, vistas, likes e interacción; una gráfica de seguidores en el tiempo y otra de vistas por post.
 - **Capturar:** las cifras de un post (vistas, alcance, likes, comentarios, guardados, compartidos, seguidores ganados) y los seguidores de una cuenta.
 - **Pedir reel:** la cuenta y la pregunta, y si quieres el formato, la prioridad, para cuándo, el nivel (o la parada de la serie, o la articulación en fbf), lo que compara (de 2 a 4 variantes) y notas. «Remake» te deja elegir el post viejo que se rehace, de la lista de los que capturaste, ordenados de más a menos likes; marca los que ya pediste. A la derecha, los pedidos abiertos (o todos) con su estado real: cuando el agente toma uno, se enlaza a su post y desde ahí el pedido sigue al README de ese post (en curso, listo con «Ver en Publicar», publicado), sin que nadie lo vuelva a escribir.

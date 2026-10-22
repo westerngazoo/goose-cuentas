@@ -112,6 +112,10 @@ pub struct CuentaRepo {
     pub nombre: String,
     pub instagram: String,
     pub repo: String,
+    /// El repo de la cuenta declara su avatar y está ahí: `/avatar?cuenta=<slug>`.
+    pub avatar: bool,
+    /// Su color de acento, `#RRGGBB`, si lo declara.
+    pub color: Option<String>,
     pub posts: Vec<PostRepo>,
     /// Con lo que son ahora (`vivo`): el estado del post que lo tomó.
     pub pedidos: Vec<EncargoEn>,
@@ -133,6 +137,8 @@ pub fn cuentas(vault: &Vault) -> Result<Vec<CuentaRepo>, String> {
                 nombre: c.nombre.clone(),
                 instagram: c.instagram.clone(),
                 repo: repo.display().to_string(),
+                avatar: false,
+                color: None,
                 posts: Vec::new(),
                 pedidos: Vec::new(),
                 aviso: None,
@@ -140,6 +146,8 @@ pub fn cuentas(vault: &Vault) -> Result<Vec<CuentaRepo>, String> {
             match tableros.iter().find(|(r, _)| *r == repo).map(|(_, t)| t) {
                 Some(Ok(t)) => match t.cuenta(&c.nombre) {
                     Some(tc) => {
+                        out.avatar = tc.avatar.is_some();
+                        out.color = tc.color.clone();
                         out.posts = tc
                             .posts
                             .iter()
@@ -161,6 +169,40 @@ pub fn cuentas(vault: &Vault) -> Result<Vec<CuentaRepo>, String> {
             out
         })
         .collect())
+}
+
+/// El avatar de una cuenta, como lo declara su repo: la ruta (dentro del
+/// repo, sin enlaces que salgan de él) y su tipo.
+pub fn avatar(vault: &Vault, slug: &str) -> Result<(PathBuf, &'static str), String> {
+    let reg = Registro::leer(&vault.registro())?;
+    let c = reg.cuenta(slug)?;
+    let repo = reg.repo(c);
+    let t = tablero_de(&repo)?;
+    let tc = t
+        .cuenta(&c.nombre)
+        .ok_or_else(|| format!("«{}» no está en su guion-cuentas.toml", c.nombre))?;
+    let p = tc
+        .avatar_abs()
+        .ok_or_else(|| format!("{} no declara avatar", c.nombre))?;
+    let real = std::fs::canonicalize(&p).map_err(|e| format!("{}: {e}", p.display()))?;
+    let raiz =
+        std::fs::canonicalize(&tc.raiz).map_err(|e| format!("{}: {e}", tc.raiz.display()))?;
+    if !real.starts_with(&raiz) {
+        return Err(format!("el avatar de {} sale de su repo", c.nombre));
+    }
+    let tipo = match real
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_lowercase)
+        .as_deref()
+    {
+        Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("webp") => "image/webp",
+        Some("svg") => "image/svg+xml",
+        _ => return Err(format!("el avatar de {} no es una imagen", c.nombre)),
+    };
+    Ok((real, tipo))
 }
 
 /// El `publicar/ORDEN.md` de la casa: el del primer repo del registro que lo
@@ -202,8 +244,41 @@ pub struct Paquete {
 #[derive(Debug, Clone, Serialize)]
 pub struct SeccionVista {
     pub titulo: String,
+    /// El `slug` de la cuenta del registro a la que van sus paquetes (por la
+    /// carpeta `publicar` que declara cada cuenta), si se sabe.
+    pub cuenta: Option<String>,
     pub nota: String,
     pub paquetes: Vec<Paquete>,
+}
+
+/// La cuenta del registro cuya carpeta `publicar` contiene `carpeta`
+/// (relativa a `raiz`): la de la carpeta más larga, si hay varias.
+fn cuenta_de_carpeta(
+    reg: &Registro,
+    tableros: &[(PathBuf, Result<Tablero, String>)],
+    raiz: &Path,
+    carpeta: &str,
+) -> Option<String> {
+    let destino = raiz.join(carpeta);
+    let mut mejor: Option<(usize, String)> = None;
+    for c in &reg.cuentas {
+        let repo = reg.repo(c);
+        let Some(Ok(t)) = tableros.iter().find(|(r, _)| *r == repo).map(|(_, t)| t) else {
+            continue;
+        };
+        let Some(tc) = t.cuenta(&c.nombre) else {
+            continue;
+        };
+        for g in &tc.decl.publicar {
+            for d in guion_tablero::cuentas::glob(&tc.raiz, g) {
+                let n = d.components().count();
+                if destino.starts_with(&d) && mejor.as_ref().is_none_or(|(m, _)| n > *m) {
+                    mejor = Some((n, c.slug.clone()));
+                }
+            }
+        }
+    }
+    mejor.map(|(_, s)| s)
 }
 
 fn leer_txt(p: &Path) -> Option<String> {
@@ -218,10 +293,15 @@ pub fn orden(vault: &Vault) -> Result<(PathBuf, Vec<SeccionVista>), String> {
     let (raiz, archivo) = orden_md(&reg)?;
     let texto =
         std::fs::read_to_string(&archivo).map_err(|e| format!("{}: {e}", archivo.display()))?;
+    let tableros = resumen::leer_tableros(&reg);
     let secciones = crate::orden::parse(&texto)
         .into_iter()
         .filter(|s| !s.entradas.is_empty())
         .map(|s| SeccionVista {
+            cuenta: s
+                .entradas
+                .iter()
+                .find_map(|e| cuenta_de_carpeta(&reg, &tableros, &raiz, &e.carpeta)),
             titulo: s.titulo,
             nota: s.nota,
             paquetes: s
