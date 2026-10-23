@@ -205,17 +205,46 @@ pub fn avatar(vault: &Vault, slug: &str) -> Result<(PathBuf, &'static str), Stri
     Ok((real, tipo))
 }
 
-/// El `publicar/ORDEN.md` de la casa: el del primer repo del registro que lo
-/// tenga. Devuelve (raíz del repo, ruta del archivo).
-pub fn orden_md(reg: &Registro) -> Result<(PathBuf, PathBuf), String> {
-    reg.repos()
+/// Los `publicar/ORDEN.md` de la casa: el de cada repo del registro que lo
+/// tenga, en el orden del registro. Devuelve (raíz del repo, ruta del
+/// archivo); nunca vacío: si ningún repo lo tiene, es un error.
+pub fn orden_mds(reg: &Registro) -> Result<Vec<(PathBuf, PathBuf)>, String> {
+    let v: Vec<_> = reg
+        .repos()
         .into_iter()
         .map(|r| {
             let f = r.join("publicar/ORDEN.md");
             (r, f)
         })
-        .find(|(_, f)| f.is_file())
-        .ok_or_else(|| "ningún repo del registro tiene publicar/ORDEN.md".to_string())
+        .filter(|(_, f)| f.is_file())
+        .collect();
+    if v.is_empty() {
+        return Err("ningún repo del registro tiene publicar/ORDEN.md".to_string());
+    }
+    Ok(v)
+}
+
+/// El archivo de `ruta` (relativa a la raíz de un repo con ORDEN.md): el del
+/// primer repo donde exista dentro de su `publicar/`. Error 404 si no existe
+/// en ninguno, 403 si existe pero sale de `publicar/` o no es un archivo.
+pub fn ruta_en_publicar(reg: &Registro, ruta: &str) -> Result<PathBuf, (u16, String)> {
+    let mut fuera = false;
+    for (raiz, _) in orden_mds(reg).map_err(|e| (404, e))? {
+        let base = std::fs::canonicalize(raiz.join("publicar"));
+        let f = std::fs::canonicalize(raiz.join(ruta));
+        let (Ok(base), Ok(f)) = (base, f) else {
+            continue;
+        };
+        if f.starts_with(&base) && f.is_file() {
+            return Ok(f);
+        }
+        fuera = true;
+    }
+    Err(if fuera {
+        (403, "fuera de publicar/".to_string())
+    } else {
+        (404, "no existe".to_string())
+    })
 }
 
 /// Una entrada de ORDEN.md con lo que hay en su carpeta.
@@ -287,21 +316,36 @@ fn leer_txt(p: &Path) -> Option<String> {
         .map(|t| t.trim_end().to_string())
 }
 
-/// Las secciones de ORDEN.md con sus paquetes, en orden.
+/// Las secciones de todos los ORDEN.md (uno por repo, en el orden del
+/// registro) con sus paquetes. La raíz que devuelve es la del primero.
 pub fn orden(vault: &Vault) -> Result<(PathBuf, Vec<SeccionVista>), String> {
     let reg = Registro::leer(&vault.registro())?;
-    let (raiz, archivo) = orden_md(&reg)?;
-    let texto =
-        std::fs::read_to_string(&archivo).map_err(|e| format!("{}: {e}", archivo.display()))?;
+    let ordenes = orden_mds(&reg)?;
     let tableros = resumen::leer_tableros(&reg);
-    let secciones = crate::orden::parse(&texto)
+    let mut secciones = Vec::new();
+    for (raiz, archivo) in &ordenes {
+        let texto =
+            std::fs::read_to_string(archivo).map_err(|e| format!("{}: {e}", archivo.display()))?;
+        secciones.extend(secciones_de(&reg, &tableros, raiz, &texto));
+    }
+    Ok((ordenes[0].0.clone(), secciones))
+}
+
+/// Las secciones de un ORDEN.md cuyo repo tiene la raíz `raiz`.
+fn secciones_de(
+    reg: &Registro,
+    tableros: &[(PathBuf, Result<Tablero, String>)],
+    raiz: &Path,
+    texto: &str,
+) -> Vec<SeccionVista> {
+    crate::orden::parse(texto)
         .into_iter()
         .filter(|s| !s.entradas.is_empty())
         .map(|s| SeccionVista {
             cuenta: s
                 .entradas
                 .iter()
-                .find_map(|e| cuenta_de_carpeta(&reg, &tableros, &raiz, &e.carpeta)),
+                .find_map(|e| cuenta_de_carpeta(reg, tableros, raiz, &e.carpeta)),
             titulo: s.titulo,
             nota: s.nota,
             paquetes: s
@@ -375,21 +419,14 @@ pub fn orden(vault: &Vault) -> Result<(PathBuf, Vec<SeccionVista>), String> {
                 })
                 .collect(),
         })
-        .collect();
-    Ok((raiz, secciones))
+        .collect()
 }
 
-/// El archivo de `ruta` (relativa al repo de ORDEN.md), si existe y está
+/// El archivo de `ruta` (relativa al repo de su ORDEN.md), si existe y está
 /// dentro de `publicar/`; si no, por qué no.
 pub fn archivo_de_publicar(vault: &Vault, ruta: &str) -> Result<PathBuf, String> {
     let reg = Registro::leer(&vault.registro())?;
-    let (raiz, _) = orden_md(&reg)?;
-    let base = std::fs::canonicalize(raiz.join("publicar")).map_err(|_| "no existe publicar/")?;
-    let f = std::fs::canonicalize(raiz.join(ruta)).map_err(|_| "no existe".to_string())?;
-    if !f.starts_with(&base) || !f.is_file() {
-        return Err("fuera de publicar/".into());
-    }
-    Ok(f)
+    ruta_en_publicar(&reg, ruta).map_err(|(_, e)| e)
 }
 
 /// Muestra el archivo en el explorador del sistema (Finder en macOS). Solo
@@ -431,9 +468,22 @@ pub fn marcar_orden(
         }
     }
     let reg = Registro::leer(&vault.registro())?;
-    let (raiz, archivo) = orden_md(&reg)?;
-    let texto =
-        std::fs::read_to_string(&archivo).map_err(|e| format!("{}: {e}", archivo.display()))?;
+    // el ORDEN.md que tiene la carpeta (el primero, si varios la tuvieran)
+    let mut hallado = None;
+    for (raiz, archivo) in orden_mds(&reg)? {
+        let texto =
+            std::fs::read_to_string(&archivo).map_err(|e| format!("{}: {e}", archivo.display()))?;
+        if crate::orden::tiene(&texto, carpeta) {
+            hallado = Some((raiz, archivo, texto));
+            break;
+        }
+    }
+    let (raiz, archivo, texto) = hallado.ok_or_else(|| {
+        format!(
+            "ningún ORDEN.md tiene la carpeta «{}»",
+            carpeta.trim_end_matches('/')
+        )
+    })?;
     let nuevo = crate::orden::marcar(&texto, carpeta, fecha, enlace)?;
     std::fs::write(&archivo, nuevo).map_err(|e| format!("{}: {e}", archivo.display()))?;
     let mut hecho = vec![format!("ORDEN.md: «{carpeta}» publicado")];

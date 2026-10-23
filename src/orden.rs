@@ -164,6 +164,15 @@ pub fn parse(texto: &str) -> Vec<Seccion> {
     secciones
 }
 
+/// Si `texto` tiene una entrada con `carpeta` (con o sin `/` al final).
+pub fn tiene(texto: &str, carpeta: &str) -> bool {
+    let carpeta = carpeta.trim_end_matches('/');
+    parse(texto)
+        .into_iter()
+        .flat_map(|s| s.entradas)
+        .any(|e| e.carpeta == carpeta)
+}
+
 /// El texto con la entrada de `carpeta` marcada publicada en `fecha`, con su
 /// enlace si lo hay. Si ya estaba publicada, solo completa el enlace.
 pub fn marcar(

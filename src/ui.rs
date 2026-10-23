@@ -363,18 +363,10 @@ fn archivo(vault: &Vault, p: &Peticion) -> Respuesta {
         Ok(r) => r,
         Err(e) => return Respuesta::error(400, &e),
     };
-    let raiz = match acciones::orden_md(&reg) {
-        Ok((r, _)) => r,
-        Err(e) => return Respuesta::error(404, &e),
+    let f = match acciones::ruta_en_publicar(&reg, ruta) {
+        Ok(f) => f,
+        Err((estado, e)) => return Respuesta::error(estado, &e),
     };
-    let base = std::fs::canonicalize(raiz.join("publicar"));
-    let f = std::fs::canonicalize(raiz.join(ruta));
-    let (Ok(base), Ok(f)) = (base, f) else {
-        return Respuesta::error(404, "no existe");
-    };
-    if !f.starts_with(&base) || !f.is_file() {
-        return Respuesta::error(403, "fuera de publicar/");
-    }
     let datos = match std::fs::read(&f) {
         Ok(d) => d,
         Err(e) => return Respuesta::error(404, &e.to_string()),
@@ -929,6 +921,117 @@ mod tests {
         ));
         let readme = std::fs::read_to_string(repo.join("posts/deriva/README.md")).unwrap();
         assert!(readme.contains("publicado (2026-10-21, https://www.instagram.com/reel/abc/)"));
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn cada_repo_con_su_orden() {
+        // dos repos en el registro, cada uno con su publicar/ORDEN.md: la
+        // pestaña Publicar los junta, y cada archivo y cada marca van al suyo
+        let (v, d) = mundo("dos-ordenes");
+        let uno = d.join("repo");
+        let pk = uno.join("publicar/rotor/deriva");
+        std::fs::create_dir_all(&pk).unwrap();
+        std::fs::write(pk.join("deriva.mp4"), b"uno").unwrap();
+        std::fs::write(
+            uno.join("publicar/ORDEN.md"),
+            "## @rotorfisicoracing\n\n### 1. ¿Deriva?\n\n- **Carpeta:** `publicar/rotor/deriva/`\n\n- [ ] Publicado · fecha: ______ · enlace: ______\n",
+        )
+        .unwrap();
+        let dos = d.join("otro");
+        let pk = dos.join("publicar/otra/mapa");
+        std::fs::create_dir_all(&pk).unwrap();
+        std::fs::create_dir_all(dos.join("posts")).unwrap();
+        std::fs::write(pk.join("mapa.mp4"), b"dos").unwrap();
+        std::fs::write(dos.join("secreto.txt"), "no").unwrap();
+        std::fs::write(
+            dos.join("guion-cuentas.toml"),
+            "[[cuenta]]\nnombre = \"Otra\"\nposts = [\"posts/*\"]\npublicar = [\"publicar/otra\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dos.join("publicar/ORDEN.md"),
+            "## Otra\n\n### 1. ¿El mapa?\n\n- **Carpeta:** `publicar/otra/mapa/`\n\n- [ ] Publicado · fecha: ______ · enlace: ______\n",
+        )
+        .unwrap();
+        let mut reg = std::fs::read_to_string(v.registro()).unwrap();
+        reg.push_str(&format!(
+            "[[cuenta]]\nslug = \"otra\"\nnombre = \"Otra\"\ninstagram = \"\"\nrepo = {:?}\n",
+            dos.display().to_string()
+        ));
+        std::fs::write(v.registro(), reg).unwrap();
+        let hoy = "2026-10-22";
+
+        let r = responder(&v, 7171, hoy, &pet("GET", "/api/orden", ""));
+        assert_eq!(r.estado, 200, "{}", r.texto());
+        let e: Value = serde_json::from_slice(&r.cuerpo).unwrap();
+        let titulos: Vec<&str> = e["secciones"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s["titulo"].as_str().unwrap())
+            .collect();
+        assert_eq!(titulos, ["@rotorfisicoracing", "Otra"]);
+        assert_eq!(e["secciones"][1]["cuenta"], "otra");
+        assert_eq!(
+            e["secciones"][1]["paquetes"][0]["video"],
+            "publicar/otra/mapa/mapa.mp4"
+        );
+
+        // cada archivo sale de su repo
+        for (ruta, cuerpo) in [
+            ("publicar%2Frotor%2Fderiva%2Fderiva.mp4", "uno"),
+            ("publicar%2Fotra%2Fmapa%2Fmapa.mp4", "dos"),
+        ] {
+            let r = responder(
+                &v,
+                7171,
+                hoy,
+                &pet("GET", &format!("/archivo?ruta={ruta}"), ""),
+            );
+            assert_eq!((r.estado, r.texto()), (200, cuerpo.to_string()), "{ruta}");
+        }
+        // y del segundo repo tampoco se sale de publicar/
+        let r = responder(
+            &v,
+            7171,
+            hoy,
+            &pet("GET", "/archivo?ruta=publicar/../secreto.txt", ""),
+        );
+        assert_eq!(r.estado, 403);
+
+        // la marca va al ORDEN.md que tiene la carpeta, y solo a ese
+        let r = responder(
+            &v,
+            7171,
+            hoy,
+            &pet(
+                "POST",
+                "/api/orden/publicado",
+                r#"{"carpeta":"publicar/otra/mapa","enlace":"https://www.instagram.com/reel/xyz/"}"#,
+            ),
+        );
+        assert_eq!(r.estado, 200, "{}", r.texto());
+        let otro = std::fs::read_to_string(dos.join("publicar/ORDEN.md")).unwrap();
+        assert!(
+            otro.contains("- [x] Publicado · fecha: 2026-10-22"),
+            "{otro}"
+        );
+        let primero = std::fs::read_to_string(uno.join("publicar/ORDEN.md")).unwrap();
+        assert!(primero.contains("- [ ] Publicado"), "{primero}");
+
+        // una carpeta que no está en ningún ORDEN.md es un error
+        let r = responder(
+            &v,
+            7171,
+            hoy,
+            &pet(
+                "POST",
+                "/api/orden/publicado",
+                r#"{"carpeta":"publicar/nada"}"#,
+            ),
+        );
+        assert_eq!(r.estado, 400, "{}", r.texto());
         let _ = std::fs::remove_dir_all(d);
     }
 }
