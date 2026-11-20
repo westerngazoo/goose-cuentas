@@ -352,7 +352,11 @@ Columnas de `posts.csv`: `fecha` (AAAA-MM-DD, cuando se copió), `cuenta` (el
 `slug` de `cuentas.toml`), `post` (la carpeta del post en su repo, o un slug
 para los posts viejos que no tienen carpeta), y luego `vistas`, `alcance`,
 `likes`, `comentarios`, `guardados`, `compartidos` y `seguidores_ganados`. Una
-celda vacía es «no se copió», no cero. `nota` es texto libre.
+celda vacía es «no se copió», no cero. `nota` es texto libre. Al final, la
+retención que reporta Insights: `salto_pct` (el % que se va antes de 3 s, de 0
+a 100), `medio_s` (el tiempo medio de reproducción, en segundos) y
+`no_seguidores_pct` (el % de las vistas de no seguidores, de 0 a 100). Las filas
+de antes de esas tres columnas se siguen leyendo, con ellas vacías.
 
 ## Lo que no va aquí
 

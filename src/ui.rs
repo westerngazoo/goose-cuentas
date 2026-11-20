@@ -105,6 +105,12 @@ struct MedicionIn {
     #[serde(default)]
     seguidores_ganados: Option<u64>,
     #[serde(default)]
+    salto_pct: Option<f64>,
+    #[serde(default)]
+    medio_s: Option<f64>,
+    #[serde(default)]
+    no_seguidores_pct: Option<f64>,
+    #[serde(default)]
     nota: String,
 }
 
@@ -243,6 +249,9 @@ pub fn responder(vault: &Vault, puerto: u16, hoy: &str, p: &Peticion) -> Respues
                     compartidos: m.compartidos,
                     seguidores_ganados: m.seguidores_ganados,
                     nota: m.nota.trim().to_string(),
+                    salto_pct: m.salto_pct,
+                    medio_s: m.medio_s,
+                    no_seguidores_pct: m.no_seguidores_pct,
                 };
                 acciones::medir_post(vault, &m, hoy).map(|_| {
                     json!({ "ok": format!("{} · {} del {}", m.cuenta, m.post, m.fecha) })
@@ -695,6 +704,26 @@ mod tests {
             ),
         );
         assert_eq!(r.estado, 400);
+        for malo in [
+            r#"{"cuenta":"rotor","post":"deriva","salto_pct":101}"#,
+            r#"{"cuenta":"rotor","post":"deriva","medio_s":-1}"#,
+            r#"{"cuenta":"rotor","post":"deriva","no_seguidores_pct":-0.5}"#,
+            r#"{"cuenta":"rotor","post":"deriva","salto_pct":"45"}"#,
+        ] {
+            let r = responder(&v, 7171, hoy, &pet("POST", "/api/medicion", malo));
+            assert_eq!(r.estado, 400, "{malo}");
+        }
+        let r = responder(
+            &v,
+            7171,
+            hoy,
+            &pet(
+                "POST",
+                "/api/medicion",
+                r#"{"cuenta":"rotor","post":"presion","salto_pct":45.5,"medio_s":8,"no_seguidores_pct":62}"#,
+            ),
+        );
+        assert_eq!(r.estado, 200, "{}", r.texto());
 
         let r = responder(
             &v,
@@ -727,6 +756,9 @@ mod tests {
         let c = &e["resumen"]["cuentas"][0];
         assert_eq!(c["seguidores"], 390);
         assert_eq!(c["vistas"], 1500);
+        assert_eq!(e["mediciones"][1]["salto_pct"], 45.5);
+        assert_eq!(e["mediciones"][1]["medio_s"], 8.0);
+        assert_eq!(e["mediciones"][0]["salto_pct"], Value::Null);
         assert_eq!(e["cuentas"][0]["posts"][0]["estado"], "publicado");
         assert_eq!(e["cuentas"][0]["pedidos"][0]["idea"], "¿Por qué derrapa?");
         assert!(std::fs::read_to_string(v.resumen_md())
