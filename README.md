@@ -55,7 +55,7 @@ Las pestañas Publicar y Pedir reel llevan la cuenta de lo pendiente. Tiene cinc
 
 - **Publicar** (la que abre): lo que dice `publicar/ORDEN.md`. Arriba, el siguiente de cada cuenta, desplegado; abajo, lo demás en filas que se abren. Cada reel trae su video para verlo ahí mismo, su caption y su texto alternativo con un botón para copiarlos, la ruta local del video y de la portada (con «Copiar ruta», para pegarla en el diálogo de subir, y «Mostrar en Finder»), los botones para bajarlos, y «Ya lo subí» con el enlace. Ese botón marca la entrada en `ORDEN.md` y el README del post. El siguiente de cada cuenta va resaltado.
 - **Tablero:** cada cuenta con sus seguidores, vistas, likes e interacción; una gráfica de seguidores en el tiempo y otra de vistas por post.
-- **Capturar:** las cifras de un post (vistas, alcance, likes, comentarios, guardados, compartidos, seguidores ganados) y los seguidores de una cuenta.
+- **Capturar:** las cifras de un post (vistas, alcance, likes, comentarios, guardados, compartidos, seguidores ganados y la retención: salto, tiempo medio y vistas de no seguidores) y los seguidores de una cuenta.
 - **Pedir reel:** la cuenta y la pregunta, y si quieres el formato, la prioridad, para cuándo, el nivel (o la parada de la serie, o la articulación en fbf), lo que compara (de 2 a 4 variantes) y notas. «Remake» te deja elegir el post viejo que se rehace, de la lista de los que capturaste, ordenados de más a menos likes; marca los que ya pediste. A la derecha, los pedidos abiertos (o todos) con su estado real: cuando el agente toma uno, se enlaza a su post y desde ahí el pedido sigue al README de ese post (en curso, listo con «Ver en Publicar», publicado), sin que nadie lo vuelva a escribir.
 - **Posts:** el estado de cada post y el botón «Ya lo subí».
 
@@ -67,6 +67,7 @@ Escribe los mismos archivos que la línea de comandos. Se cierra con Ctrl-C.
 cuentas tablero                                  # cada cuenta: estados, seguidores, sus posts con más vistas
 cuentas stats seguidores rotor 390               # los seguidores de hoy
 cuentas stats post rotor deriva --vistas 1500 --likes 90 --guardados 12 --compartidos 4
+cuentas stats post rotor deriva --salto 45.5 --medio 8 --nosegu 62   # la retención, de Insights
 cuentas stats post fbf 04-press --likes 2523     # un post viejo, sin carpeta
 cuentas stats ver rotor
 cuentas pedir pmmo "¿Por qué los cuaterniones son planos?"   # un pedido de reel
@@ -80,6 +81,10 @@ cuentas nota                                     # reescribe cuentas/resumen.md
 - `<post>` es el nombre de la carpeta del post en su repo. Para un post viejo
   sin carpeta, inventa un slug estable (`04-press`) y úsalo siempre igual.
 - Una celda que no copiaste queda vacía: es «no se copió», no cero.
+- La retención viene de Insights: `--salto` es el % de quienes se van antes de
+  3 s y `--nosegu` el % de las vistas de no seguidores (los dos de 0 a 100);
+  `--medio` es el tiempo medio de reproducción, en segundos (≥ 0). El punto es
+  el separador decimal; un valor fuera de rango falla sin escribir nada.
 - Cada medición es una fila nueva. La historia es el dato: el tablero usa la
   más reciente de cada post.
 - `pedir` agrega un encargo al `encargos.toml` del repo de la cuenta, el mismo
@@ -95,14 +100,17 @@ cuentas nota                                     # reescribe cuentas/resumen.md
 cuentas/
   README.md                    qué es cada archivo y de dónde salen los números
   cuentas.toml                 el registro de las cuentas
-  estadisticas/posts.csv       fecha,cuenta,post,vistas,alcance,likes,comentarios,guardados,compartidos,seguidores_ganados,nota
+  estadisticas/posts.csv       fecha,cuenta,post,vistas,alcance,likes,comentarios,guardados,compartidos,seguidores_ganados,nota,salto_pct,medio_s,no_seguidores_pct
   estadisticas/seguidores.csv  fecha,cuenta,seguidores,nota
   resumen.md                   generado después de cada medición
 ```
 
 Todo es texto: lo abres en Obsidian o en cualquier editor, y lo puedes
 corregir a mano. El encabezado de cada CSV se compara letra por letra, así que
-una columna movida falla con su nombre en vez de leerse mal.
+una columna movida falla con su nombre en vez de leerse mal. Las columnas nuevas
+van siempre al final: un `posts.csv` con el encabezado de antes (sin las tres de
+retención) se sigue leyendo, y su encabezado se sube al nuevo la siguiente vez
+que agregas una medición, sin tocar las filas que ya tenía.
 
 ## Lo que sigue
 

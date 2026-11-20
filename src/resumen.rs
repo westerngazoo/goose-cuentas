@@ -14,7 +14,7 @@ use guion_tablero::post::Estado;
 use guion_tablero::tablero::Tablero;
 use serde::Serialize;
 
-use crate::estadisticas::{Medicion, Seguidores};
+use crate::estadisticas::{con_unidad, Medicion, Seguidores};
 use crate::registro::Registro;
 
 /// Un post con números o con estado.
@@ -269,8 +269,13 @@ impl Resumen {
                         .ultima
                         .as_ref()
                         .expect("un post con números tiene medición");
+                    let retencion = if m.tiene_retencion() {
+                        format!(" · {}", m.retencion_texto())
+                    } else {
+                        String::new()
+                    };
                     o.push_str(&format!(
-                        "    {:<24} {:>9} vistas {:>7} likes  ({})\n",
+                        "    {:<24} {:>9} vistas {:>7} likes  ({}){retencion}\n",
                         p.post,
                         celda(m.vistas),
                         celda(m.likes),
@@ -299,7 +304,9 @@ impl Resumen {
              > Generado por `cuentas nota`; no lo edites a mano. Los números los \
              reporta Instagram y los copia el dueño (la fecha de cada uno es la de \
              su medición); la interacción es (likes + comentarios + guardados + \
-             compartidos) ÷ vistas, calculada aquí.\n\n",
+             compartidos) ÷ vistas, calculada aquí. Salto: el % que se va antes \
+             de 3 s; medio: el tiempo medio de reproducción; no seg.: el % de las \
+             vistas que vienen de no seguidores (los tres, de Insights).\n\n",
             self.fecha
         );
         o.push_str(
@@ -335,8 +342,8 @@ impl Resumen {
             if c.posts.is_empty() {
                 o.push_str("Sin mediciones todavía.\n");
             } else {
-                o.push_str("| Post | Fecha | Vistas | Alcance | Likes | Coment. | Guard. | Compart. | Seguidores |\n");
-                o.push_str("|---|---|--:|--:|--:|--:|--:|--:|--:|\n");
+                o.push_str("| Post | Fecha | Vistas | Alcance | Likes | Coment. | Guard. | Compart. | Seguidores | Salto | Medio | No seg. |\n");
+                o.push_str("|---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|\n");
                 for p in &c.posts {
                     let m = p
                         .ultima
@@ -348,7 +355,7 @@ impl Resumen {
                         .map(|t| format!("{} ({})", t, p.post))
                         .unwrap_or_else(|| p.post.clone());
                     o.push_str(&format!(
-                        "| {} | {} | {} | {} | {} | {} | {} | {} | {} |\n",
+                        "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |\n",
                         nombre.replace('|', "\\|"),
                         m.fecha,
                         celda(m.vistas),
@@ -357,7 +364,10 @@ impl Resumen {
                         celda(m.comentarios),
                         celda(m.guardados),
                         celda(m.compartidos),
-                        celda(m.seguidores_ganados)
+                        celda(m.seguidores_ganados),
+                        con_unidad(m.salto_pct, "%"),
+                        con_unidad(m.medio_s, "s"),
+                        con_unidad(m.no_seguidores_pct, "%")
                     ));
                 }
             }
@@ -480,6 +490,30 @@ mod tests {
         assert!(r.texto().contains("seguidores: sin medición"));
         assert!(r.markdown().contains("Sin mediciones todavía."));
         assert!(r.markdown().contains("| Rotor | — | — | — | — | — | 0 |"));
+    }
+
+    #[test]
+    fn retention_shows_in_the_board_and_the_note() {
+        let ms = [
+            Medicion {
+                salto_pct: Some(45.5),
+                medio_s: Some(8.0),
+                ..m("2026-11-20", "deriva", 1500, 90)
+            },
+            m("2026-11-20", "presion", 900, 40),
+        ];
+        let r = armar(&registro(), &ms, &[], &[], "2026-11-20");
+        let t = r.texto();
+        assert!(
+            t.contains("(2026-11-20) · salto 45.5\u{202f}% · medio 8\u{202f}s · no seg. —\n"),
+            "{t}"
+        );
+        // a post without retention keeps its line as before
+        assert!(t.contains("likes  (2026-11-20)\n"), "{t}");
+        let md = r.markdown();
+        assert!(md.contains("| Salto | Medio | No seg. |"), "{md}");
+        assert!(md.contains("| 45.5\u{202f}% | 8\u{202f}s | — |\n"), "{md}");
+        assert!(md.contains("| — | — | — |\n"), "{md}");
     }
 
     #[test]

@@ -323,7 +323,7 @@ a.btn { text-decoration: none; display: inline-block; }
     <div class="grid" id="seguidores-graficas"></div>
     <h2>Vistas por post (la medición más reciente de cada uno)</h2>
     <div class="grid" id="vistas-graficas"></div>
-    <p class="nota">Los números los reporta Instagram y los copias tú, con la fecha en que los copiaste. La interacción es (likes + comentarios + guardados + compartidos) ÷ vistas, calculada aquí. Un número que no copiaste aparece como «—», no como cero.</p>
+    <p class="nota">Los números los reporta Instagram y los copias tú, con la fecha en que los copiaste. La interacción es (likes + comentarios + guardados + compartidos) ÷ vistas, calculada aquí. Salto es el % que se va antes de 3 s, medio el tiempo medio de reproducción y no seg. el % de las vistas de no seguidores, los tres de Insights. Un número que no copiaste aparece como «—», no como cero.</p>
   </section>
 
   <section id="capturar" hidden>
@@ -345,6 +345,11 @@ a.btn { text-decoration: none; display: inline-block; }
             <label>Guardados <input name="guardados" inputmode="numeric"></label>
             <label>Compartidos <input name="compartidos" inputmode="numeric"></label>
             <label>Seguidores ganados <input name="seguidores_ganados" inputmode="numeric"></label>
+          </div>
+          <div class="campos">
+            <label>Salto, % que se va antes de 3 s <input name="salto_pct" inputmode="decimal" placeholder="0 a 100"></label>
+            <label>Tiempo medio, s <input name="medio_s" inputmode="decimal" placeholder="≥ 0"></label>
+            <label>Vistas de no seguidores, % <input name="no_seguidores_pct" inputmode="decimal" placeholder="0 a 100"></label>
           </div>
           <label>Nota <input name="nota" placeholder="de la app, de Insights…"></label>
           <div class="acciones"><button class="btn">Guardar medición</button><span class="msg" id="m-msg" role="status"></span></div>
@@ -449,6 +454,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const NBSP = " ";
 const miles = n => n == null ? "—" : String(n).replace(/\B(?=(\d{3})+(?!\d))/g, NBSP);
 const pct = x => x == null ? "—" : (x * 100).toFixed(1) + NBSP + "%";
+const unidad = (x, u) => x == null ? "—" : x + NBSP + u;
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 let E = null;
 
@@ -666,7 +672,8 @@ function barras(cont, posts) {
     const m = p.ultima;
     hit.addEventListener("pointermove", ev => mostrar(ev,
       `<b>${esc(p.titulo || p.post)}</b><br>${esc(m.fecha)} · ${miles(m.vistas)} vistas · ${miles(m.likes)} likes` +
-      `<br>${miles(m.guardados)} guardados · ${miles(m.compartidos)} compartidos · ${miles(m.comentarios)} comentarios`));
+      `<br>${miles(m.guardados)} guardados · ${miles(m.compartidos)} compartidos · ${miles(m.comentarios)} comentarios` +
+      `<br>salto ${unidad(m.salto_pct, "%")} · medio ${unidad(m.medio_s, "s")} · no seg. ${unidad(m.no_seguidores_pct, "%")}`));
     hit.addEventListener("pointerleave", ocultar);
   });
   cont.replaceChildren(s);
@@ -701,6 +708,15 @@ const entero = (s, nombre) => {
   if (!/^\d+$/.test(s)) throw new Error(`${nombre}: un entero ≥ 0`);
   return Number(s);
 };
+// a retention figure: a decimal ≥ 0, at most `max` if given (the server validates it again)
+const decimal = (s, nombre, max) => {
+  s = String(s ?? "").trim();
+  if (s === "") return null;
+  const rango = max == null ? "un número ≥ 0" : `un número de 0 a ${max}`;
+  if (!/^\d+(\.\d+)?$/.test(s) || (max != null && Number(s) > max)) throw new Error(`${nombre}: ${rango}`);
+  return Number(s);
+};
+const RETENCION = [["salto_pct", "salto", 100], ["medio_s", "tiempo medio", null], ["no_seguidores_pct", "no seguidores", 100]];
 
 $("#f-medicion").addEventListener("submit", async ev => {
   ev.preventDefault();
@@ -709,8 +725,9 @@ $("#f-medicion").addEventListener("submit", async ev => {
     const post = f.get("post") === "__otro" ? String(f.get("otro")).trim() : f.get("post");
     const cuerpo = { cuenta: f.get("cuenta"), post, fecha: f.get("fecha") || null, nota: f.get("nota") || "" };
     for (const k of ["vistas", "alcance", "likes", "comentarios", "guardados", "compartidos", "seguidores_ganados"]) cuerpo[k] = entero(f.get(k), k);
+    for (const [k, nombre, max] of RETENCION) cuerpo[k] = decimal(f.get(k), nombre, max);
     if (await enviar("/api/medicion", cuerpo, msg))
-      ["vistas", "alcance", "likes", "comentarios", "guardados", "compartidos", "seguidores_ganados", "nota"].forEach(k => ev.target.elements[k].value = "");
+      ["vistas", "alcance", "likes", "comentarios", "guardados", "compartidos", "seguidores_ganados", ...RETENCION.map(r => r[0]), "nota"].forEach(k => ev.target.elements[k].value = "");
   } catch (e) { msg.className = "msg error"; msg.textContent = e.message; }
 });
 
@@ -788,8 +805,8 @@ $("#f-pedido").addEventListener("submit", async ev => {
 function pintarMediciones() {
   const ms = E.mediciones.slice(-25).reverse();
   const nombre = s => (E.cuentas.find(c => c.slug === s) || { nombre: s }).nombre;
-  $("#t-mediciones").innerHTML = ms.length ? `<thead><tr><th>Fecha</th><th>Cuenta</th><th>Post</th><th class="n">Vistas</th><th class="n">Likes</th><th class="n">Coment.</th><th class="n">Guard.</th><th class="n">Compart.</th><th>Nota</th></tr></thead><tbody>` +
-    ms.map(m => `<tr><td>${esc(m.fecha)}</td><td>${av(m.cuenta, 18)}${esc(nombre(m.cuenta))}</td><td>${esc(m.post)}</td><td class="n">${miles(m.vistas)}</td><td class="n">${miles(m.likes)}</td><td class="n">${miles(m.comentarios)}</td><td class="n">${miles(m.guardados)}</td><td class="n">${miles(m.compartidos)}</td><td>${esc(m.nota)}</td></tr>`).join("") + "</tbody>"
+  $("#t-mediciones").innerHTML = ms.length ? `<thead><tr><th>Fecha</th><th>Cuenta</th><th>Post</th><th class="n">Vistas</th><th class="n">Likes</th><th class="n">Coment.</th><th class="n">Guard.</th><th class="n">Compart.</th><th class="n">Salto</th><th class="n">Medio</th><th class="n">No seg.</th><th>Nota</th></tr></thead><tbody>` +
+    ms.map(m => `<tr><td>${esc(m.fecha)}</td><td>${av(m.cuenta, 18)}${esc(nombre(m.cuenta))}</td><td>${esc(m.post)}</td><td class="n">${miles(m.vistas)}</td><td class="n">${miles(m.likes)}</td><td class="n">${miles(m.comentarios)}</td><td class="n">${miles(m.guardados)}</td><td class="n">${miles(m.compartidos)}</td><td class="n">${unidad(m.salto_pct, "%")}</td><td class="n">${unidad(m.medio_s, "s")}</td><td class="n">${unidad(m.no_seguidores_pct, "%")}</td><td>${esc(m.nota)}</td></tr>`).join("") + "</tbody>"
     : `<tbody><tr><td class="vacio">Todavía no hay mediciones.</td></tr></tbody>`;
 }
 

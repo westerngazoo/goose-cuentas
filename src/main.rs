@@ -4,7 +4,7 @@ use std::path::Path;
 
 use std::process::ExitCode;
 
-use goose_cuentas::estadisticas::{self, Medicion, Seguidores};
+use goose_cuentas::estadisticas::{self, Medicion, Seguidores, Unidad};
 use goose_cuentas::registro::Registro;
 use goose_cuentas::vault::{inicio, Config, Vault};
 use goose_cuentas::{acciones, ui};
@@ -21,7 +21,11 @@ uso: cuentas [--vault DIR] <comando>
 
   stats post <cuenta> <post> [--fecha F] [--vistas N] [--alcance N] [--likes N]
              [--comentarios N] [--guardados N] [--compartidos N] [--seguidores N]
-             [--nota TEXTO]       una medición de un post, copiada de Instagram
+             [--salto N] [--medio S] [--nosegu N]
+             [--nota TEXTO]       una medición de un post, copiada de Instagram;
+                                  --salto: % que se va antes de 3 s (0 a 100),
+                                  --medio: tiempo medio de reproducción en segundos (≥ 0),
+                                  --nosegu: % de las vistas de no seguidores (0 a 100)
   stats seguidores <cuenta> <N> [--fecha F] [--nota TEXTO]
   stats ver [<cuenta>] [--json]   las mediciones tal como están en el vault
 
@@ -100,6 +104,14 @@ impl Args {
                     .parse::<u64>()
                     .map_err(|_| format!("{k} «{v}»: un entero ≥ 0"))
             })
+            .transpose()
+    }
+
+    /// A retention figure (`--salto`, `--medio`, `--nosegu`), validated for
+    /// its unit; `None` if the flag was not given.
+    fn cifra(&self, k: &str, unidad: Unidad) -> Result<Option<f64>, String> {
+        self.valor(k)
+            .map(|v| estadisticas::leer_cifra(k, v, unidad).map_err(|e| e.to_string()))
             .transpose()
     }
 
@@ -231,6 +243,9 @@ fn correr(v: Vec<String>) -> Result<(), String> {
                 "--guardados",
                 "--compartidos",
                 "--seguidores",
+                "--salto",
+                "--medio",
+                "--nosegu",
                 "--nota",
             ])?;
             let m = Medicion {
@@ -245,6 +260,9 @@ fn correr(v: Vec<String>) -> Result<(), String> {
                 compartidos: a.numero("--compartidos")?,
                 seguidores_ganados: a.numero("--seguidores")?,
                 nota: a.valor("--nota").unwrap_or("").to_string(),
+                salto_pct: a.cifra("--salto", Unidad::Porcentaje)?,
+                medio_s: a.cifra("--medio", Unidad::Segundos)?,
+                no_seguidores_pct: a.cifra("--nosegu", Unidad::Porcentaje)?,
             };
             let nota = acciones::medir_post(&vault, &m, &hoy)?;
             println!("agregada: {} {} del {}", m.cuenta, m.post, m.fecha);
@@ -299,9 +317,9 @@ fn correr(v: Vec<String>) -> Result<(), String> {
                 for m in &ms {
                     let f = |v: Option<u64>| v.map(|x| x.to_string()).unwrap_or_else(|| "—".into());
                     println!(
-                        "{}  {:<10} {:<24} vistas {} · likes {} · coment. {} · guard. {} · compart. {}",
+                        "{}  {:<10} {:<24} vistas {} · likes {} · coment. {} · guard. {} · compart. {} · {}",
                         m.fecha, m.cuenta, m.post, f(m.vistas), f(m.likes), f(m.comentarios),
-                        f(m.guardados), f(m.compartidos)
+                        f(m.guardados), f(m.compartidos), m.retencion_texto()
                     );
                 }
             }
